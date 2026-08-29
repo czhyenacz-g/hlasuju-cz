@@ -67,11 +67,19 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
     };
   });
 
+  const [{ uniqueParticipants }] = await db
+    .select({ uniqueParticipants: sql<number>`count(distinct ${votes.participantId})`.mapWith(Number) })
+    .from(votes)
+    .innerJoin(questions, eq(votes.questionId, questions.id))
+    .where(eq(questions.pollId, poll.id));
+
   return {
     title: poll.title,
     publicCode: poll.publicCode,
     pollStatus: poll.status as ModeratorPollView["pollStatus"],
     activeQuestionId: poll.activeQuestionId,
     questions: questionViews,
+    totalVotes: questionViews.reduce((sum, q) => sum + q.totalVotes, 0),
+    uniqueParticipants,
   };
 }

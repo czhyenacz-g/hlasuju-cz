@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { usePolling } from "../../lib/use-polling.ts";
 import { getOrCreateParticipantId } from "../../lib/participant-id.ts";
 import AdSlot from "../../components/AdSlot.tsx";
-import type { PublicPollView } from "../../lib/polls/types.ts";
+import AdBanner from "../../components/AdBanner.tsx";
+import ResultsBarChart from "../../components/ResultsBarChart.tsx";
+import type { FinalResultsView, PublicPollView } from "../../lib/polls/types.ts";
 
 // Klientská hlídka "hlasoval(a) jsem už u téhle otázky" — resetuje se
 // pokaždé, když moderátor aktivuje jinou otázku (viz activeQuestionId
@@ -80,7 +82,10 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   }
 
   if (data && !data.notFound && data.poll.pollStatus === "closed") {
-    return <StateScreen title="Hlasování bylo ukončeno" message="Děkujeme za účast." />;
+    if (!participantId) {
+      return <StateScreen title="Hlasování skončilo" message="Načítám výsledky…" />;
+    }
+    return <FinalResultsSection publicCode={publicCode} participantId={participantId} />;
   }
 
   if (!activeQuestion) {
@@ -129,6 +134,71 @@ function StateScreen({ title, message, showAd = false }: { title: string; messag
             <AdSlot label="Reklamní plocha — čekání na otázku" />
           </div>
         )}
+      </div>
+    </main>
+  );
+}
+
+// Jednorázový fetch (ne polling) — jakmile je poll uzavřený, hlasy se
+// už nemění (cast-vote odmítá hlasy mimo status "active"), takže
+// opakované dotazování by bylo zbytečné.
+function FinalResultsSection({ publicCode, participantId }: { publicCode: string; participantId: string }) {
+  const [data, setData] = useState<FinalResultsView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/api/polls/public/${publicCode}/final-results?participantId=${encodeURIComponent(participantId)}`, {
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Nepodařilo se načíst výsledky.");
+        return response.json();
+      })
+      .then((result: FinalResultsView) => setData(result))
+      .catch((err) => {
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          setError("Nepodařilo se načíst výsledky.");
+        }
+      });
+    return () => controller.abort();
+  }, [publicCode, participantId]);
+
+  if (error) {
+    return <StateScreen title="Hlasování skončilo" message={error} />;
+  }
+
+  if (!data) {
+    return <StateScreen title="Hlasování skončilo" message="Načítám výsledky…" />;
+  }
+
+  return (
+    <main className="mx-auto min-h-screen max-w-md px-4 py-10">
+      <h1 className="text-center text-3xl font-bold text-gray-900">Hlasování skončilo</h1>
+      {data.title && <p className="mt-2 text-center text-lg text-gray-600">{data.title}</p>}
+
+      <div className="mt-10 flex flex-col gap-10">
+        {data.questions.map((q, index) => (
+          <section key={q.id}>
+            <h2 className="text-xl font-bold text-gray-900">
+              {index + 1}. {q.text}
+            </h2>
+            {q.participantSelectedOptionId === null && (
+              <p className="mt-2 text-sm text-gray-500">Na tuto otázku jste nehlasoval/a.</p>
+            )}
+            <div className="mt-4">
+              <ResultsBarChart
+                options={q.options}
+                totalVotes={q.totalVotes}
+                selectedOptionId={q.participantSelectedOptionId}
+              />
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="mt-12">
+        <AdBanner />
       </div>
     </main>
   );

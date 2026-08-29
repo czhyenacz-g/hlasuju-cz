@@ -1,5 +1,5 @@
 import Link from "next/link";
-import AdSlot from "../components/AdSlot.tsx";
+import AdBanner from "../components/AdBanner.tsx";
 import { SITE_TAGLINE } from "./config/site.ts";
 import HomeJoinForm from "./HomeJoinForm.tsx";
 
@@ -32,7 +32,7 @@ export default function Home() {
         <p className="mt-8 text-sm text-gray-500">Bez registrace. Zdarma. Hotovo za pár sekund.</p>
 
         <div className="mt-10">
-          <AdSlot label="Reklamní plocha — homepage" />
+          <AdBanner />
         </div>
       </div>
     </main>

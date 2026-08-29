@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { usePolling } from "../../../lib/use-polling.ts";
 import QrCode from "../../../components/QrCode.tsx";
 import ResultsBarChart from "../../../components/ResultsBarChart.tsx";
-import AdSlot from "../../../components/AdSlot.tsx";
+import AdBanner from "../../../components/AdBanner.tsx";
 import type { ModeratorPollView } from "../../../lib/polls/types.ts";
 
 // Prev/Next je čistě lokální kurzor pro procházení/výběr otázky
@@ -85,6 +85,16 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
     }
   }
 
+  if (poll.pollStatus === "closed") {
+    return (
+      <ModeratorFinalSummary
+        poll={poll}
+        onCopyLink={copyLink}
+        copyLabel={copyLabel === "Kopírovat odkaz" ? "Kopírovat odkaz na výsledky" : copyLabel}
+      />
+    );
+  }
+
   if (showResults && question) {
     return (
       <main className="mx-auto min-h-screen max-w-2xl px-4 py-10">
@@ -135,19 +145,7 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         )}
       </section>
 
-      {poll.pollStatus === "closed" ? (
-        <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-6 text-center">
-          <p className="font-semibold text-gray-900">Hlasování bylo ukončeno.</p>
-          <button
-            type="button"
-            onClick={() => setShowResults(true)}
-            className="mt-4 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white hover:bg-brand-dark"
-          >
-            Zobrazit výsledky
-          </button>
-        </section>
-      ) : (
-        question && (
+      {question && (
           <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-gray-500">
               Otázka {cursor + 1} z {poll.questions.length}
@@ -202,13 +200,75 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
 
             {actionError && <p className="mt-3 text-sm text-red-600">{actionError}</p>}
           </section>
-        )
       )}
+    </main>
+  );
+}
 
-      <div className="mt-10">
-        <AdSlot label="Reklamní plocha — moderátor" />
+// Jakmile je poll "closed", tohle nahradí celou řídicí obrazovku —
+// hlavní výsledky mají vždy přednost (viz zadání), žádné tlačítko
+// "Zobrazit výsledky" pro dílčí náhled tu už nedává smysl.
+function ModeratorFinalSummary({
+  poll,
+  onCopyLink,
+  copyLabel,
+}: {
+  poll: ModeratorPollView;
+  onCopyLink: () => void;
+  copyLabel: string;
+}) {
+  const averageVotes = poll.questions.length > 0 ? Math.round(poll.totalVotes / poll.questions.length) : 0;
+
+  return (
+    <main className="mx-auto min-h-screen max-w-2xl px-4 py-10">
+      <h1 className="text-3xl font-bold text-gray-900">Výsledky hlasování</h1>
+      {poll.title && <p className="mt-1 text-lg text-gray-600">{poll.title}</p>}
+      <p className="mt-1 text-sm text-gray-500">hlasuju.cz/{poll.publicCode}</p>
+
+      <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Počet otázek" value={poll.questions.length} />
+        <Stat label="Unikátní účastníci" value={poll.uniqueParticipants} />
+        <Stat label="Celkem hlasů" value={poll.totalVotes} />
+        <Stat label="Průměr na otázku" value={averageVotes} />
+      </dl>
+
+      <button
+        type="button"
+        onClick={onCopyLink}
+        className="mt-6 rounded-xl border-2 border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-800 hover:border-brand hover:text-brand"
+      >
+        {copyLabel}
+      </button>
+
+      <div className="mt-10 flex flex-col gap-10">
+        {poll.questions.map((q, index) => (
+          <section key={q.id}>
+            <h2 className="text-xl font-bold text-gray-900">
+              {index + 1}. {q.text}
+            </h2>
+            <div className="mt-4">
+              <ResultsBarChart options={q.options} totalVotes={q.totalVotes} />
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Celkem: {q.totalVotes} {q.totalVotes === 1 ? "hlas" : q.totalVotes < 5 ? "hlasy" : "hlasů"}
+            </p>
+          </section>
+        ))}
+      </div>
+
+      <div className="mt-12">
+        <AdBanner />
       </div>
     </main>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 text-center">
+      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</dt>
+      <dd className="mt-1 text-2xl font-bold text-gray-900">{value}</dd>
+    </div>
   );
 }
 
