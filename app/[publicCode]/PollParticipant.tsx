@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePolling } from "../../lib/use-polling.ts";
 import { getOrCreateParticipantId } from "../../lib/participant-id.ts";
-import AdSlot from "../../components/AdSlot.tsx";
-import AdBanner from "../../components/AdBanner.tsx";
+import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx";
 import ResultsBarChart from "../../components/ResultsBarChart.tsx";
 import type { FinalResultsView, PublicPollView } from "../../lib/polls/types.ts";
 
@@ -95,7 +94,10 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   }
 
   if (votedQuestionId === activeQuestion.id) {
-    return <StateScreen title="✓ Hlas byl zaznamenán" message="Čekáme na další otázku…" />;
+    // Hlas je odeslaný, hlavní úkol dokončen -> compact banner je tu v
+    // pořádku (viz zadání "zobraz ho ve chvíli, kdy uživatel odešle
+    // odpověď"), nikdy ale nad/mezi otázkou a odpověďmi výš.
+    return <StateScreen title="✓ Hlas byl zaznamenán" message="Čekáme na další otázku…" showAd />;
   }
 
   return (
@@ -131,7 +133,7 @@ function StateScreen({ title, message, showAd = false }: { title: string; messag
         <p className="mt-3 text-gray-600">{message}</p>
         {showAd && (
           <div className="mt-10">
-            <AdSlot label="Reklamní plocha — čekání na otázku" />
+            <AlphegaAffiliateBanner variant="compact" />
           </div>
         )}
       </div>
@@ -198,7 +200,7 @@ function FinalResultsSection({ publicCode, participantId }: { publicCode: string
       </div>
 
       <div className="mt-12">
-        <AdBanner />
+        <AlphegaAffiliateBanner variant="standard" />
       </div>
     </main>
   );

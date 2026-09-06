@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import PollEditor from "./PollEditor.tsx";
+import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx";
 
 export const metadata: Metadata = {
   title: "Vytvořit hlasování",
@@ -12,6 +13,12 @@ export default function CreatePollPage() {
       <p className="mt-2 text-gray-600">Přidejte otázky a odpovědi. Po vytvoření dostanete odkaz pro účastníky a moderátorský odkaz.</p>
       <div className="mt-8">
         <PollEditor />
+      </div>
+
+      {/* decentní compact — uživatel je uprostřed vyplňování formuláře,
+          plný pozornosti si zaslouží akce, ne reklama (viz zadání). */}
+      <div className="mt-8">
+        <AlphegaAffiliateBanner variant="compact" />
       </div>
     </main>
   );

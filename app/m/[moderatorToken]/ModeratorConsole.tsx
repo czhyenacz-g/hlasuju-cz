@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { usePolling } from "../../../lib/use-polling.ts";
 import QrCode from "../../../components/QrCode.tsx";
 import ResultsBarChart from "../../../components/ResultsBarChart.tsx";
-import AdBanner from "../../../components/AdBanner.tsx";
+import AlphegaAffiliateBanner from "../../../components/AlphegaAffiliateBanner.tsx";
 import type { ModeratorPollView } from "../../../lib/polls/types.ts";
 
 // Prev/Next je čistě lokální kurzor pro procházení/výběr otázky
@@ -201,6 +201,12 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
             {actionError && <p className="mt-3 text-sm text-red-600">{actionError}</p>}
           </section>
       )}
+
+      {/* compact, vždy pod řízením hlasování — moderátor tuhle obrazovku
+          typicky sdílí na projektoru, banner nesmí být sticky/nápadný. */}
+      <div className="mt-6">
+        <AlphegaAffiliateBanner variant="compact" />
+      </div>
     </main>
   );
 }
@@ -257,7 +263,7 @@ function ModeratorFinalSummary({
       </div>
 
       <div className="mt-12">
-        <AdBanner />
+        <AlphegaAffiliateBanner variant="standard" />
       </div>
     </main>
   );
