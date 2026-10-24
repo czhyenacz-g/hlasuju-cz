@@ -224,7 +224,11 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
             {question.options.map((option, index) => (
               <li key={option.id} className="flex items-baseline gap-3">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-md bg-brand-light text-sm font-bold text-brand-dark">{LETTERS[index]}</span>
-                <span className="flex-1">{option.text}</span>
+                <span className="flex-1">
+                  {option.text}
+                  {/* Jen pro moderátora — účastníci a plátno ji uvidí až po ukončení otázky. */}
+                  {option.id === question.correctOptionId && <span className="ml-2 text-sm font-semibold text-emerald-700">✓ správná</span>}
+                </span>
                 {question.status !== "prepared" && <span className="text-sm text-gray-500">{option.votes}</span>}
               </li>
             ))}
@@ -366,7 +370,7 @@ function ModeratorFinalSummary({
               </div>
             )}
             <div className="mt-4">
-              <ResultsBarChart options={q.options} totalVotes={q.totalVotes} />
+              <ResultsBarChart options={q.options} totalVotes={q.totalVotes} correctOptionId={q.status === "ended" ? q.correctOptionId : null} />
             </div>
             <p className="mt-2 text-sm text-gray-500">
               Celkem: {q.totalVotes} {votesLabel(q.totalVotes)}

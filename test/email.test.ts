@@ -156,7 +156,7 @@ describe("e-mail s výsledky", () => {
       uniqueParticipants: 3,
       questions: [{ text: "Ano; nebo \"ne\"?", totalVotes: 3, options: [{ text: "=SUM(A1)", votes: 2 }, { text: "Ne", votes: 1 }] }],
     });
-    assert.ok(csv.startsWith("﻿Otázka;Odpověď;Hlasy;Procenta\r\n"));
+    assert.ok(csv.startsWith("﻿Otázka;Odpověď;Hlasy;Procenta;Správná\r\n"));
     assert.match(csv, /"1\. Ano; nebo ""ne""\?";'=SUM\(A1\);2;67 %/);
     assert.match(csv, /;Ne;1;33 %/);
   });

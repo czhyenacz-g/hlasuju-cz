@@ -21,6 +21,7 @@ type ExistingQuestion = {
   linkUrl: string | null;
   linkLabel: string | null;
   linkShowDuringVoting: boolean;
+  correctOptionId: number | null;
   options: { id: number; text: string }[];
   voteCount: number;
 };
@@ -47,7 +48,9 @@ function sameLockedContent(existing: ExistingQuestion, input: UpdatePollQuestion
     (existing.linkUrl ?? null) === (link?.url ?? null) &&
     (existing.linkUrl
       ? (existing.linkLabel ?? null) === (link?.label ?? null) && existing.linkShowDuringVoting === (link?.showDuringVoting ?? false)
-      : true)
+      : true) &&
+    // Správná odpověď spuštěné otázky je zamčená stejně jako odpovědi.
+    existing.correctOptionId === (input.correctOptionIndex === null ? null : (input.options[input.correctOptionIndex]?.id ?? null))
   );
 }
 
@@ -98,7 +101,13 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
     if (poll.version !== input.version) return { ok: false, reason: "version_conflict", currentVersion: poll.version };
 
     const questionRows = await tx
-      .select({ id: questions.id, text: questions.text, status: questions.status, ...questionMediaColumns })
+      .select({
+        id: questions.id,
+        text: questions.text,
+        status: questions.status,
+        correctOptionId: questions.correctOptionId,
+        ...questionMediaColumns,
+      })
       .from(questions)
       .where(eq(questions.pollId, poll.id));
 
@@ -127,6 +136,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         linkUrl: row.linkUrl,
         linkLabel: row.linkLabel,
         linkShowDuringVoting: row.linkShowDuringVoting,
+        correctOptionId: row.correctOptionId,
         options: [],
         voteCount: 0,
       });
@@ -214,19 +224,29 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
       }
 
       if (current) {
-        await tx.update(questions).set(questionColumns(question, position)).where(eq(questions.id, current.id));
-
         const keptIds = new Set(question.options.flatMap((option) => (option.id === undefined ? [] : [option.id])));
         const droppedIds = current.options.filter((option) => !keptIds.has(option.id)).map((option) => option.id);
         if (droppedIds.length > 0) await tx.delete(options).where(inArray(options.id, droppedIds));
 
+        const optionIds: number[] = [];
         for (const [optionPosition, option] of question.options.entries()) {
           if (option.id !== undefined) {
             await tx.update(options).set({ text: option.text, position: optionPosition }).where(eq(options.id, option.id));
+            optionIds.push(option.id);
           } else {
-            await tx.insert(options).values({ questionId: current.id, text: option.text, position: optionPosition });
+            const [insertedOption] = await tx
+              .insert(options)
+              .values({ questionId: current.id, text: option.text, position: optionPosition })
+              .returning({ id: options.id });
+            optionIds.push(insertedOption.id);
           }
         }
+
+        const correctOptionId = question.correctOptionIndex === null ? null : optionIds[question.correctOptionIndex];
+        await tx
+          .update(questions)
+          .set({ ...questionColumns(question, position), correctOptionId })
+          .where(eq(questions.id, current.id));
         continue;
       }
 
@@ -234,9 +254,12 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         .insert(questions)
         .values({ pollId: poll.id, status: "prepared", ...questionColumns(question, position) })
         .returning({ id: questions.id });
-      await tx.insert(options).values(
-        question.options.map((option, optionPosition) => ({ questionId: inserted.id, text: option.text, position: optionPosition }))
-      );
+      const insertedOptions = await tx
+        .insert(options)
+        .values(question.options.map((option, optionPosition) => ({ questionId: inserted.id, text: option.text, position: optionPosition })))
+        .returning({ id: options.id, position: options.position });
+      const correct = insertedOptions.find((option) => option.position === question.correctOptionIndex);
+      if (correct) await tx.update(questions).set({ correctOptionId: correct.id }).where(eq(questions.id, inserted.id));
     }
 
     const nextVersion = poll.version + 1;

@@ -145,7 +145,14 @@ export default function PresentationView({
 
           <div className="flex flex-col gap-6">
             {showResults ? (
-              <ResultsBarChart options={question.options} totalVotes={question.totalVotes} large />
+              <ResultsBarChart
+                options={question.options}
+                totalVotes={question.totalVotes}
+                // Vyhodnocení až po ukončení otázky — během hlasování (i po
+                // znovuotevření) se správná odpověď na plátně neukáže.
+                correctOptionId={question.status === "ended" ? question.correctOptionId : null}
+                large
+              />
             ) : (
               <ol className="flex flex-col gap-3 lg:gap-4">
                 {question.options.map((option, index) => (

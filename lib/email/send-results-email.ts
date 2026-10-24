@@ -3,7 +3,17 @@ import { SITE_URL } from "../../app/config/site.ts";
 import { LIMITS } from "../polls/limits.ts";
 import { button, emailLayout, emailStyles, escapeHtml } from "./layout.ts";
 
-export type ResultsEmailQuestion = { text: string; options: { text: string; votes: number }[]; totalVotes: number };
+export type ResultsEmailQuestion = {
+  text: string;
+  options: { id?: number; text: string; votes: number }[];
+  totalVotes: number;
+  /** Nepovinná správná odpověď — u ní ✓ v e-mailu a „ano“ v CSV. */
+  correctOptionId?: number | null;
+};
+
+function isCorrect(question: ResultsEmailQuestion, option: ResultsEmailQuestion["options"][number]): boolean {
+  return question.correctOptionId != null && option.id === question.correctOptionId;
+}
 
 export type ResultsEmailInput = {
   title: string | null;
@@ -30,10 +40,16 @@ function csvCell(value: string | number): string {
 }
 
 export function buildResultsCsv(input: ResultsEmailInput): string {
-  const rows: (string | number)[][] = [["Otázka", "Odpověď", "Hlasy", "Procenta"]];
+  const rows: (string | number)[][] = [["Otázka", "Odpověď", "Hlasy", "Procenta", "Správná"]];
   input.questions.forEach((question, index) => {
     for (const option of question.options) {
-      rows.push([`${index + 1}. ${question.text}`, option.text, option.votes, `${percent(option.votes, question.totalVotes)} %`]);
+      rows.push([
+        `${index + 1}. ${question.text}`,
+        option.text,
+        option.votes,
+        `${percent(option.votes, question.totalVotes)} %`,
+        isCorrect(question, option) ? "ano" : "",
+      ]);
     }
   });
   // BOM, aby Excel poznal UTF-8 (diakritika).
@@ -58,7 +74,9 @@ export function buildResultsEmail(input: ResultsEmailInput) {
       const rows = question.options
         .map((option) => {
           const pct = percent(option.votes, question.totalVotes);
-          return `<tr><td style="padding:6px 0 2px;font-size:15px">${escapeHtml(option.text)}</td><td align="right" style="padding:6px 0 2px;font-size:15px;white-space:nowrap"><strong>${pct} %</strong> <span style="color:${MUTED}">· ${option.votes} ${votesWord(option.votes)}</span></td></tr>
+          const mark = isCorrect(question, option) ? `<strong style="color:#1f7a4d">✓ </strong>` : "";
+          const note = isCorrect(question, option) ? ` <span style="font-size:13px;color:#1f7a4d">(správná odpověď)</span>` : "";
+          return `<tr><td style="padding:6px 0 2px;font-size:15px">${mark}${escapeHtml(option.text)}${note}</td><td align="right" style="padding:6px 0 2px;font-size:15px;white-space:nowrap"><strong>${pct} %</strong> <span style="color:${MUTED}">· ${option.votes} ${votesWord(option.votes)}</span></td></tr>
 <tr><td colspan="2" style="padding:0 0 4px"><div style="background:${LAVENDER};border-radius:6px;height:8px"><div style="background:${BRAND};border-radius:6px;height:8px;width:${pct}%"></div></div></td></tr>`;
         })
         .join("");
@@ -85,7 +103,10 @@ ${questionsHtml || `<p style="font-size:15px">Žádná otázka nebyla spuštěna
     "",
     ...input.questions.flatMap((question, index) => [
       `${index + 1}. ${question.text}`,
-      ...question.options.map((option) => `   ${option.text}: ${percent(option.votes, question.totalVotes)} % (${option.votes} ${votesWord(option.votes)})`),
+      ...question.options.map(
+        (option) =>
+          `   ${isCorrect(question, option) ? "✓ " : ""}${option.text}: ${percent(option.votes, question.totalVotes)} % (${option.votes} ${votesWord(option.votes)})${isCorrect(question, option) ? " – správná odpověď" : ""}`
+      ),
       `   Celkem ${question.totalVotes} ${votesWord(question.totalVotes)}`,
       "",
     ]),

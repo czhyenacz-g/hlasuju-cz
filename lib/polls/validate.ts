@@ -194,7 +194,16 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       return { ok: false, error: `${prefix}: obrázek lze nahrát až po vytvoření hlasování.` };
     }
 
-    questions.push({ ...(id === undefined ? {} : { id }), text, options, image, link: link.value });
+    // Nepovinná správná odpověď = index do `options` (nejvýš jedna z principu).
+    let correctOptionIndex: number | null = null;
+    if (q.correctOptionIndex !== undefined && q.correctOptionIndex !== null) {
+      if (!Number.isInteger(q.correctOptionIndex) || (q.correctOptionIndex as number) < 0 || (q.correctOptionIndex as number) >= options.length) {
+        return { ok: false, error: `${prefix}: neplatná správná odpověď.` };
+      }
+      correctOptionIndex = q.correctOptionIndex as number;
+    }
+
+    questions.push({ ...(id === undefined ? {} : { id }), text, options, image, link: link.value, correctOptionIndex });
   }
 
   return { ok: true, value: questions };
@@ -234,7 +243,12 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
     value: {
       title: title.value,
       email,
-      questions: questions.value.map((q) => ({ text: q.text, options: q.options.map((o) => ({ text: o.text })), link: q.link })),
+      questions: questions.value.map((q) => ({
+        text: q.text,
+        options: q.options.map((o) => ({ text: o.text })),
+        link: q.link,
+        correctOptionIndex: q.correctOptionIndex,
+      })),
     },
   };
 }

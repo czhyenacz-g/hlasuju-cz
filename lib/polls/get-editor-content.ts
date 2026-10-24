@@ -19,7 +19,13 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
   if (!poll) return null;
 
   const questionRows = await db
-    .select({ id: questions.id, text: questions.text, status: questions.status, ...questionMediaColumns })
+    .select({
+      id: questions.id,
+      text: questions.text,
+      status: questions.status,
+      correctOptionId: questions.correctOptionId,
+      ...questionMediaColumns,
+    })
     .from(questions)
     .where(eq(questions.pollId, poll.id))
     .orderBy(questions.position);
@@ -62,6 +68,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
         image: toQuestionImage(row),
         link: toQuestionLink(row),
         options: optionsByQuestion.get(row.id) ?? [],
+        correctOptionId: row.correctOptionId,
       };
     }),
   };

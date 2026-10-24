@@ -71,6 +71,10 @@ export const questions = pgTable(
     linkUrl: varchar("link_url", { length: 2000 }),
     linkLabel: varchar("link_label", { length: 100 }),
     linkShowDuringVoting: boolean("link_show_during_voting").notNull().default(false),
+    // Nepovinná správná odpověď (options.id této otázky), NULL = běžná
+    // anketa. Záměrně bez .references() (kruh questions <-> options, viz
+    // polls.activeQuestionId). Účastníkům se ukazuje až po ukončení otázky.
+    correctOptionId: integer("correct_option_id"),
   },
   (table) => [index("questions_poll_id_idx").on(table.pollId)]
 );

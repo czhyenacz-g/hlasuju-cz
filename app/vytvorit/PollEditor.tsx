@@ -22,6 +22,8 @@ type QuestionDraft = {
   text: string;
   expanded: boolean;
   options: OptionDraft[];
+  // Klíč odpovědi označené jako správná (nepovinné), null = běžná anketa.
+  correctKey: string | null;
   image: ImageDraft | null;
   imageAlt: string;
   linkUrl: string;
@@ -56,6 +58,7 @@ function emptyQuestion(expanded = true): QuestionDraft {
     text: "",
     expanded,
     options: [emptyOption(), emptyOption()],
+    correctKey: null,
     image: null,
     imageAlt: "",
     linkUrl: "",
@@ -83,6 +86,7 @@ function draftFromQuestion(question: EditorQuestion): QuestionDraft {
     text: question.text,
     expanded: false,
     options: question.options.map((option) => ({ key: `o${option.id}`, id: option.id, text: option.text })),
+    correctKey: question.correctOptionId ? `o${question.correctOptionId}` : null,
     image: question.image ? { kind: "stored", url: question.image.url, width: question.image.width, height: question.image.height } : null,
     imageAlt: question.image?.alt ?? "",
     linkUrl: question.link ? readableUrl(question.link.url) : "",
@@ -121,8 +125,9 @@ async function uploadImage(
 /** Návrh otázky → vstup pro PUT /content (zamčené otázky beze změny). */
 function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url: string; width: number; height: number }>) {
   if (question.locked && question.original) {
-    const { id, text, options, image, link } = question.original;
-    return { id, text, options, image, link };
+    const { id, text, options, image, link, correctOptionId } = question.original;
+    const correctIndex = options.findIndex((option) => option.id === correctOptionId);
+    return { id, text, options, image, link, correctOptionIndex: correctIndex === -1 ? null : correctIndex };
   }
 
   let image: QuestionImage | null = null;
@@ -134,6 +139,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
     if (stored) image = { ...stored, alt };
   }
 
+  const correctIndex = question.options.findIndex((option) => option.key === question.correctKey);
   return {
     ...(question.id ? { id: question.id } : {}),
     text: question.text.trim(),
@@ -142,6 +148,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
     link: question.linkUrl.trim()
       ? { url: question.linkUrl.trim(), label: question.linkLabel.trim() || null, showDuringVoting: question.linkShowDuringVoting }
       : null,
+    correctOptionIndex: correctIndex === -1 ? null : correctIndex,
   };
 }
 
@@ -211,10 +218,12 @@ export default function PollEditor(props: PollEditorProps) {
       const index = prev.findIndex((q) => q.key === key);
       if (index === -1 || prev.length >= LIMITS.MAX_QUESTIONS) return prev;
       const source = prev[index];
+      const copiedOptions = source.options.map((o) => ({ key: makeKey(), text: o.text }));
       const copy: QuestionDraft = {
         ...emptyQuestion(false),
         text: source.text,
-        options: source.options.map((o) => ({ key: makeKey(), text: o.text })),
+        options: copiedOptions,
+        correctKey: copiedOptions[source.options.findIndex((o) => o.key === source.correctKey)]?.key ?? null,
         // Uložený obrázek může sdílet i kopie; nenahraný se musí nahrát znovu.
         image: source.image?.kind === "stored" ? source.image : null,
         imageAlt: source.image?.kind === "stored" ? source.imageAlt : "",
@@ -672,6 +681,20 @@ function QuestionCard({
                       placeholder="Text odpovědi"
                       className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
                     />
+                    <label
+                      className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-gray-600 hover:bg-pastel-green has-[:checked]:bg-pastel-green has-[:checked]:font-semibold has-[:checked]:text-emerald-800"
+                      title="Označit jako správnou odpověď"
+                    >
+                      <input
+                        type="radio"
+                        name={`correct-${question.key}`}
+                        checked={question.correctKey === option.key}
+                        onChange={() => onChange({ correctKey: option.key })}
+                        className="h-4 w-4 accent-emerald-700"
+                      />
+                      <span className="hidden sm:inline">Správná</span>
+                      <span className="sr-only sm:hidden">Odpověď {LETTERS[optionIndex]} je správná</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => onUpdateOptions((options) => (options.length > LIMITS.MIN_OPTIONS ? options.filter((o) => o.key !== option.key) : options))}
@@ -691,6 +714,17 @@ function QuestionCard({
                 >
                   + Přidat odpověď
                 </button>
+                <p className="pl-9 text-xs text-gray-500">
+                  Správná odpověď je nepovinná. Účastníci ji uvidí až po ukončení otázky.
+                  {question.options.some((o) => o.key === question.correctKey) && (
+                    <>
+                      {" "}
+                      <button type="button" onClick={() => onChange({ correctKey: null })} className="font-semibold text-brand hover:underline">
+                        Zrušit správnou odpověď
+                      </button>
+                    </>
+                  )}
+                </p>
               </div>
 
               <LinkField question={question} onChange={onChange} />
@@ -719,6 +753,7 @@ function LockedQuestionBody({ question, previewUrl }: { question: QuestionDraft;
           <li key={option.key}>
             <span className="mr-2 font-bold text-gray-400">{LETTERS[optionIndex]}</span>
             {option.text}
+            {option.key === question.correctKey && <span className="ml-2 font-semibold text-emerald-800">✓ správná</span>}
           </li>
         ))}
       </ul>

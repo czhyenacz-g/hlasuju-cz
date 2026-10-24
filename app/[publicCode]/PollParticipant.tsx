@@ -15,7 +15,7 @@ import type { FinalResultsView, PublicPollView } from "../../lib/polls/types.ts"
 // tohle je jen pro instantní UX bez čekání na chybu z API.
 export default function PollParticipant({ publicCode }: { publicCode: string }) {
   const [participantId, setParticipantId] = useState<string | null>(null);
-  const [voted, setVoted] = useState<{ questionId: number; optionText: string } | null>(null);
+  const [voted, setVoted] = useState<{ questionId: number; optionId: number; optionText: string } | null>(null);
   const [voting, setVoting] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
 
@@ -62,7 +62,7 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
         setVoting(false);
         return;
       }
-      setVoted({ questionId: activeQuestion.id, optionText });
+      setVoted({ questionId: activeQuestion.id, optionId, optionText });
     } catch {
       setVoteError("Hlas se nepodařilo zaznamenat. Zkuste to prosím znovu.");
     } finally {
@@ -97,6 +97,13 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
       <StateScreen title="Hlasování u otázky skončilo" message="Čekáme na další otázku…" showAd>
         <div className="mt-6 text-left">
           <p className="font-semibold text-gray-900">{closedQuestion.text}</p>
+          {closedQuestion.correctOptionId !== null && (
+            <AnswerEvaluation
+              options={closedQuestion.options}
+              correctOptionId={closedQuestion.correctOptionId}
+              myOptionId={voted?.questionId === closedQuestion.id ? voted.optionId : null}
+            />
+          )}
           {closedQuestion.link && <QuestionLink link={closedQuestion.link} className="mt-3" />}
         </div>
       </StateScreen>
@@ -153,6 +160,46 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
         {activeQuestion.link && <QuestionLink link={activeQuestion.link} className="mt-6" />}
       </div>
     </main>
+  );
+}
+
+// Vyhodnocení ukončené otázky se správnou odpovědí (bez počtů hlasů —
+// ty účastník během hlasování neviděl ani dřív). ✓/× + text, ne jen barva.
+function AnswerEvaluation({
+  options,
+  correctOptionId,
+  myOptionId,
+}: {
+  options: { id: number; text: string }[];
+  correctOptionId: number;
+  myOptionId: number | null;
+}) {
+  return (
+    <>
+      {myOptionId !== null && (
+        <p className={`mt-4 rounded-xl px-4 py-3 font-semibold ${myOptionId === correctOptionId ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
+          {myOptionId === correctOptionId ? "✓ Odpověděli jste správně." : "× Tentokrát to nevyšlo."}
+        </p>
+      )}
+      <ul className="mt-3 flex flex-col gap-2">
+        {options.map((option) => {
+          const correct = option.id === correctOptionId;
+          return (
+            <li
+              key={option.id}
+              className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 ${correct ? "border-2 border-emerald-600 bg-emerald-50" : "border-red-200 bg-red-50/60"}`}
+            >
+              <span aria-hidden="true" className={`font-bold ${correct ? "text-emerald-700" : "text-red-700"}`}>
+                {correct ? "✓" : "×"}
+              </span>
+              <span className={correct ? "font-semibold text-gray-900" : "text-gray-800"}>{option.text}</span>
+              <span className="sr-only">{correct ? "(správná odpověď)" : "(nesprávná odpověď)"}</span>
+              {option.id === myOptionId && <span className="ml-auto text-xs font-semibold text-gray-600">Vaše odpověď</span>}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
@@ -242,6 +289,7 @@ function FinalResultsSection({ publicCode, participantId }: { publicCode: string
                 options={q.options}
                 totalVotes={q.totalVotes}
                 selectedOptionId={q.participantSelectedOptionId}
+                correctOptionId={q.correctOptionId}
               />
             </div>
             {q.link && <QuestionLink link={q.link} className="mt-3" />}

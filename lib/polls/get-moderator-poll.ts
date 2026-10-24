@@ -39,6 +39,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       text: questions.text,
       position: questions.position,
       status: questions.status,
+      correctOptionId: questions.correctOptionId,
       ...questionMediaColumns,
     })
     .from(questions)
@@ -77,6 +78,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       image: toQuestionImage(q),
       link: toQuestionLink(q),
       options: questionOptions,
+      correctOptionId: q.correctOptionId,
       totalVotes: questionOptions.reduce((sum, o) => sum + o.votes, 0),
     };
   });

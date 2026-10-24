@@ -18,9 +18,9 @@ export default function Home() {
         <p className="text-center text-lg font-bold tracking-tight text-brand">hlasuju.cz</p>
 
         <div className="mx-auto mt-5 max-w-3xl text-balance text-center sm:mt-10">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl">Hlasujte spolu. Výsledky hned.</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl">Hlasování, které zapojí každého.</h1>
           <p className="mt-3 text-base text-gray-600 sm:mt-4 sm:text-lg">
-            Jednoduché živé hlasování pro přednášky, výuku a porady. Stačí mobil a kód.
+            Ankety, kvízy a interaktivní přednášky na jednom místě. Bez registrace, bez instalace. Zvládne to každý.
           </p>
         </div>
 

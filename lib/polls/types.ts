@@ -5,7 +5,13 @@ export type QuestionImage = { url: string; width: number; height: number; alt: s
 export type QuestionLink = { url: string; label: string | null; showDuringVoting: boolean };
 
 export type CreatePollOptionInput = { text: string };
-export type CreatePollQuestionInput = { text: string; options: CreatePollOptionInput[]; link?: QuestionLink | null };
+/** `correctOptionIndex` = pořadí správné odpovědi v `options`, null = bez správné odpovědi. */
+export type CreatePollQuestionInput = {
+  text: string;
+  options: CreatePollOptionInput[];
+  link?: QuestionLink | null;
+  correctOptionIndex?: number | null;
+};
 export type CreatePollInput = {
   title?: string;
   email?: string;
@@ -22,6 +28,7 @@ export type UpdatePollQuestionInput = {
   options: UpdatePollOptionInput[];
   image: QuestionImage | null;
   link: QuestionLink | null;
+  correctOptionIndex: number | null;
 };
 export type UpdatePollInput = {
   version: number;
@@ -54,6 +61,9 @@ export type PublicPollView = {
     text: string;
     image: QuestionImage | null;
     link: PublicQuestionLink | null;
+    options: { id: number; text: string }[];
+    /** Jen tady (otázka ukončená) — nikdy v `activeQuestion`. */
+    correctOptionId: number | null;
   } | null;
 };
 
@@ -66,6 +76,7 @@ export type ModeratorQuestionView = {
   image: QuestionImage | null;
   link: QuestionLink | null;
   options: { id: number; text: string; votes: number }[];
+  correctOptionId: number | null;
 };
 
 export type ModeratorPollView = {
@@ -90,6 +101,7 @@ export type EditorQuestion = {
   image: QuestionImage | null;
   link: QuestionLink | null;
   options: { id: number; text: string }[];
+  correctOptionId: number | null;
 };
 
 export type EditorContent = {
@@ -110,6 +122,7 @@ export type FinalResultsQuestion = {
   image: QuestionImage | null;
   link: PublicQuestionLink | null;
   options: { id: number; text: string; votes: number }[];
+  correctOptionId: number | null;
   totalVotes: number;
   participantSelectedOptionId: number | null;
 };

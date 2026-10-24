@@ -18,7 +18,7 @@ async function runSqlFile(client: PGlite, file: string) {
   }
 }
 
-describe("migrace 0001 je zpětně kompatibilní", () => {
+describe("migrace 0001–0004 jsou zpětně kompatibilní", () => {
   test("hlasování založené před migrací (bez obrázků/odkazů) dál funguje", async () => {
     const client = new PGlite();
     const files = readdirSync(MIGRATIONS_FOLDER).filter((file) => file.endsWith(".sql")).sort();
@@ -50,6 +50,21 @@ describe("migrace 0001 je zpětně kompatibilní", () => {
       assert.equal(editor?.version, 1);
       assert.equal(editor?.questions[0].locked, true);
       assert.equal(editor?.questions[1].locked, false);
+
+      // 0003/0004: historická data bez správné odpovědi a bez odeslaných výsledků.
+      assert.equal(editor?.questions[0].correctOptionId, null);
+      assert.equal(moderator?.questions[0].correctOptionId, null);
+      assert.equal(moderator?.resultsEmail.remaining, 3);
+
+      // Zápisy ve tvaru staré verze aplikace (bez nových sloupců) dál projdou.
+      await client.exec(`
+        INSERT INTO polls (id, title, public_code, moderator_token, status, expires_at)
+          VALUES (2, 'Starý kód', '525252', 'legacy-token-legacy-token-legacy-token-def', 'active', now() + interval '10 days');
+        INSERT INTO questions (id, poll_id, text, position, status) VALUES (20, 2, 'Q', 0, 'prepared');
+        INSERT INTO options (id, question_id, text, position) VALUES (200, 20, 'A', 0), (201, 20, 'B', 1);
+      `);
+      const legacy = await getEditorContent("legacy-token-legacy-token-legacy-token-def");
+      assert.equal(legacy?.questions[0].correctOptionId, null);
     } finally {
       setDbForTesting(null);
       await client.close();

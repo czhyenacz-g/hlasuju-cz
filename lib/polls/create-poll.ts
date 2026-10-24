@@ -1,4 +1,5 @@
 import "server-only";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions } from "../../db/schema.ts";
 import { LIMITS } from "./limits.ts";
@@ -56,13 +57,21 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
             .returning({ id: questions.id });
           questionIds.push(insertedQuestion.id);
 
-          await tx.insert(options).values(
-            question.options.map((option, optionIndex) => ({
-              questionId: insertedQuestion.id,
-              text: option.text,
-              position: optionIndex,
-            }))
-          );
+          const insertedOptions = await tx
+            .insert(options)
+            .values(
+              question.options.map((option, optionIndex) => ({
+                questionId: insertedQuestion.id,
+                text: option.text,
+                position: optionIndex,
+              }))
+            )
+            .returning({ id: options.id, position: options.position });
+
+          const correct = insertedOptions.find((option) => option.position === question.correctOptionIndex);
+          if (correct) {
+            await tx.update(questions).set({ correctOptionId: correct.id }).where(eq(questions.id, insertedQuestion.id));
+          }
         }
       });
 

@@ -74,12 +74,29 @@ export async function vote(code: string, questionId: number, optionId: number, p
 export function contentToPayload(content: {
   version: number;
   title: string | null;
-  questions: { id: number; text: string; image: unknown; link: unknown; options: { id: number; text: string }[] }[];
+  questions: {
+    id: number;
+    text: string;
+    image: unknown;
+    link: unknown;
+    options: { id: number; text: string }[];
+    correctOptionId?: number | null;
+  }[];
 }) {
   // Hluboká kopie — testy payload mutují a nesmí tím měnit zdrojový obsah.
   return structuredClone({
     version: content.version,
     title: content.title ?? undefined,
-    questions: content.questions.map((q) => ({ id: q.id, text: q.text, image: q.image, link: q.link, options: q.options })),
+    questions: content.questions.map((q) => {
+      const correctIndex = q.options.findIndex((option) => option.id === q.correctOptionId);
+      return {
+        id: q.id,
+        text: q.text,
+        image: q.image,
+        link: q.link,
+        options: q.options,
+        correctOptionIndex: correctIndex === -1 ? null : correctIndex,
+      };
+    }),
   });
 }

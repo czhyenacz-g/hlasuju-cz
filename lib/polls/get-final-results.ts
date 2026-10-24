@@ -32,7 +32,13 @@ export async function getFinalResults(publicCode: string, participantId: string 
   if (poll.status !== "closed") return { ok: false, reason: "poll_not_closed" };
 
   const questionRows = await db
-    .select({ id: questions.id, text: questions.text, position: questions.position, ...questionMediaColumns })
+    .select({
+      id: questions.id,
+      text: questions.text,
+      position: questions.position,
+      correctOptionId: questions.correctOptionId,
+      ...questionMediaColumns,
+    })
     .from(questions)
     .where(and(eq(questions.pollId, poll.id), ne(questions.status, "prepared")))
     .orderBy(questions.position);
@@ -78,6 +84,8 @@ export async function getFinalResults(publicCode: string, participantId: string 
       image: toQuestionImage(q),
       link: toPublicLink(toQuestionLink(q)),
       options: questionOptions,
+      // Hlasování je ukončené (viz výše), všechny otázky jsou ukončené.
+      correctOptionId: q.correctOptionId,
       totalVotes: questionOptions.reduce((sum, o) => sum + o.votes, 0),
       participantSelectedOptionId: selectedByQuestion.get(q.id) ?? null,
     };

@@ -13,7 +13,7 @@ import type { PublicPollView } from "./types.ts";
  * připravené (nespuštěné) otázky, jen aktuální otázku. Odkaz u otázky
  * jen po jejím ukončení, nebo když ho moderátor výslovně povolil už
  * během hlasování (může prozradit správnou odpověď). Až přibude
- * soutěžní režim, správná odpověď patří stejně jen do `closedQuestion`.
+ * správná odpověď patří jen do `closedQuestion`.
  */
 export async function getPublicPoll(publicCode: string): Promise<PublicPollView | null> {
   const db = getDb();
@@ -36,17 +36,28 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
 
   if (poll.activeQuestionId && poll.status === "active") {
     const [question] = await db
-      .select({ id: questions.id, text: questions.text, status: questions.status, ...questionMediaColumns })
+      .select({
+        id: questions.id,
+        text: questions.text,
+        status: questions.status,
+        correctOptionId: questions.correctOptionId,
+        ...questionMediaColumns,
+      })
       .from(questions)
       .where(and(eq(questions.id, poll.activeQuestionId), eq(questions.pollId, poll.id)))
       .limit(1);
 
+    const questionOptions = question
+      ? await db
+          .select({ id: options.id, text: options.text })
+          .from(options)
+          .where(eq(options.questionId, question.id))
+          .orderBy(options.position)
+      : [];
+
+    // Správná odpověď (correctOptionId) se do `activeQuestion` nikdy
+    // nedostane — ani po znovuotevření otázky. Jen do `closedQuestion`.
     if (question?.status === "active") {
-      const questionOptions = await db
-        .select({ id: options.id, text: options.text })
-        .from(options)
-        .where(eq(options.questionId, question.id))
-        .orderBy(options.position);
 
       const link = toQuestionLink(question);
       activeQuestion = {
@@ -62,6 +73,8 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
         text: question.text,
         image: toQuestionImage(question),
         link: toPublicLink(toQuestionLink(question)),
+        options: questionOptions,
+        correctOptionId: question.correctOptionId,
       };
     }
   }
