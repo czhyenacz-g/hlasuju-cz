@@ -9,6 +9,7 @@ import QuestionLink from "../../../components/QuestionLink.tsx";
 import AlphegaAffiliateBanner from "../../../components/AlphegaAffiliateBanner.tsx";
 import PresentationView from "./PresentationView.tsx";
 import ModeratorFinalSummary from "./ModeratorFinalSummary.tsx";
+import SelfServiceConsole from "./SelfServiceConsole.tsx";
 import { PrimaryQuestionAction, QuestionStatusBadge, type ModeratorAction } from "./QuestionControls.tsx";
 import type { ModeratorPollView } from "../../../lib/polls/types.ts";
 
@@ -136,6 +137,10 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         copyLabel={copyLabel === "Kopírovat odkaz" ? "Kopírovat odkaz na výsledky" : copyLabel}
       />
     );
+  }
+
+  if (poll.mode === "self_service") {
+    return <SelfServiceConsole poll={poll} moderatorToken={moderatorToken} pending={actionPending} error={actionError} onEnd={() => void runAction("end")} />;
   }
 
   if (presenting && question) {

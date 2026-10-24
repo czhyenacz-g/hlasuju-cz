@@ -43,6 +43,13 @@
       "when": 1792864224216,
       "tag": "0005_participants",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792871627961,
+      "tag": "0006_poll_mode",
+      "breakpoints": true
     }
   ]
 }

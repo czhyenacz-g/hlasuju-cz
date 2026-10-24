@@ -7,7 +7,7 @@ import type { FinalResultsQuestion, FinalResultsView } from "./types.ts";
 
 export type FinalResultsResult =
   | { ok: true; results: FinalResultsView }
-  | { ok: false; reason: "poll_not_found" | "poll_not_closed" };
+  | { ok: false; reason: "poll_not_found" | "poll_not_closed" | "not_voted" };
 
 /**
  * Finální výsledky pro účastníky — JEN pro ukončené hlasování. Během
@@ -23,13 +23,27 @@ export async function getFinalResults(publicCode: string, participantId: string 
   const db = getDb();
 
   const [poll] = await db
-    .select({ id: polls.id, title: polls.title, status: polls.status })
+    .select({ id: polls.id, title: polls.title, status: polls.status, mode: polls.mode })
     .from(polls)
     .where(and(eq(polls.publicCode, publicCode), gt(polls.expiresAt, new Date())))
     .limit(1);
 
   if (!poll) return { ok: false, reason: "poll_not_found" };
-  if (poll.status !== "closed") return { ok: false, reason: "poll_not_closed" };
+  // Veřejná anketa: průběžné výsledky vidí jen ten, kdo už hlasoval
+  // (pravidlo: nejdřív hlas, pak výsledky). Správná odpověď se během
+  // hlasování neprozradí nikomu — až po ukončení ankety (viz níž).
+  const live = poll.status !== "closed";
+  if (live && poll.mode !== "self_service") return { ok: false, reason: "poll_not_closed" };
+  if (live) {
+    if (!participantId) return { ok: false, reason: "not_voted" };
+    const [mine] = await db
+      .select({ id: votes.id })
+      .from(votes)
+      .innerJoin(questions, eq(votes.questionId, questions.id))
+      .where(and(eq(questions.pollId, poll.id), eq(votes.participantId, participantId)))
+      .limit(1);
+    if (!mine) return { ok: false, reason: "not_voted" };
+  }
 
   const questionRows = await db
     .select({
@@ -85,7 +99,7 @@ export async function getFinalResults(publicCode: string, participantId: string 
       link: toPublicLink(toQuestionLink(q)),
       options: questionOptions,
       // Hlasování je ukončené (viz výše), všechny otázky jsou ukončené.
-      correctOptionId: q.correctOptionId,
+      correctOptionId: live ? null : q.correctOptionId,
       totalVotes: questionOptions.reduce((sum, o) => sum + o.votes, 0),
       participantSelectedOptionId: selectedByQuestion.get(q.id) ?? null,
     };
@@ -96,6 +110,7 @@ export async function getFinalResults(publicCode: string, participantId: string 
     results: {
       title: poll.title,
       pollStatus: poll.status as FinalResultsView["pollStatus"],
+      mode: poll.mode as FinalResultsView["mode"],
       questions: questionViews,
     },
   };

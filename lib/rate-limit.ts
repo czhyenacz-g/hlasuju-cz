@@ -19,6 +19,9 @@ export const RATE_LIMITS = {
   // 600 hlasů/min z jedné IP do jednoho hlasování = velká aula za NATem.
   votePerIpAndPoll: { limit: 600, windowSeconds: 60 },
   votePerParticipant: { limit: 30, windowSeconds: 60 },
+  // Veřejná anketa (dlouhodobě bez moderátora): jedna IP smí do jedné
+  // ankety poslat nejvýš 30 hlasů za hodinu (domácnost, třída za NATem).
+  selfServiceVotePerIp: { limit: 30, windowSeconds: 60 * 60 },
   uploadPerPoll: { limit: 60, windowSeconds: 60 * 60 },
   uploadPerIpDaily: { limit: 200, windowSeconds: 24 * 60 * 60 },
   contentSavePerPoll: { limit: 120, windowSeconds: 60 * 60 },

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { castVote } from "../../../../../../lib/polls/cast-vote.ts";
+import { getPollMode } from "../../../../../../lib/polls/find-poll.ts";
 import { LIMITS } from "../../../../../../lib/polls/limits.ts";
 import { getClientIp, jsonError, readJsonBody, tooManyRequests } from "../../../../../../lib/http.ts";
 import { checkRateLimits, hashIdentifier, RATE_LIMITS, rule } from "../../../../../../lib/rate-limit.ts";
@@ -35,9 +36,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ pub
 
   // IP limit je per hlasování a velkorysý (celá aula za jednou školní
   // IP), participant limit zastaví klikací smyčky jednoho prohlížeče.
+  const ipKey = `${hashIdentifier(getClientIp(request))}:${publicCode.slice(0, 12)}`;
   const limited = await checkRateLimits([
-    rule("vote-ip-poll", `${hashIdentifier(getClientIp(request))}:${publicCode.slice(0, 12)}`, RATE_LIMITS.votePerIpAndPoll),
+    rule("vote-ip-poll", ipKey, RATE_LIMITS.votePerIpAndPoll),
     rule("vote-participant", hashIdentifier(participantId), RATE_LIMITS.votePerParticipant),
+    ...((await getPollMode(publicCode)) === "self_service" ? [rule("vote-ip-self", ipKey, RATE_LIMITS.selfServiceVotePerIp)] : []),
   ]);
   if (!limited.ok) return tooManyRequests(limited.retryAfterSeconds);
 

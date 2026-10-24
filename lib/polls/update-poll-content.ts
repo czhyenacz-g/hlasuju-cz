@@ -32,7 +32,9 @@ type ExistingQuestion = {
  * by se změnil význam už odevzdaných hlasů nebo by se hlasy smazaly
  * (FK cascade). Měnit jde jen její pořadí.
  */
-export function isQuestionLocked(question: { status: string; voteCount: number }): boolean {
+export function isQuestionLocked(question: { status: string; voteCount: number }, mode: string = "live"): boolean {
+  // Veřejná anketa je aktivní hned od vytvoření — zamyká ji až první hlas.
+  if (mode === "self_service") return question.voteCount > 0;
   return question.status !== "prepared" || question.voteCount > 0;
 }
 
@@ -90,7 +92,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
 
   const result = await db.transaction(async (tx): Promise<UpdatePollContentResult> => {
     const [poll] = await tx
-      .select({ id: polls.id, status: polls.status, version: polls.version })
+      .select({ id: polls.id, status: polls.status, version: polls.version, mode: polls.mode })
       .from(polls)
       .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
       .limit(1)
@@ -117,6 +119,18 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
       .innerJoin(questions, eq(options.questionId, questions.id))
       .where(eq(questions.pollId, poll.id))
       .orderBy(options.position);
+
+    if (poll.mode === "self_service") {
+      // Otázka přijímá hlasy i během editace. Zámek odpovědí (FOR UPDATE
+      // koliduje s FK zámkem vkládaného hlasu) zaručí, že hlas buď
+      // započítáme níž (→ otázka zamčená), nebo dorazí až po uložení.
+      await tx
+        .select({ id: options.id })
+        .from(options)
+        .innerJoin(questions, eq(options.questionId, questions.id))
+        .where(eq(questions.pollId, poll.id))
+        .for("update", { of: options });
+    }
 
     const voteRows = await tx
       .select({ questionId: votes.questionId, count: sql<number>`count(*)`.mapWith(Number) })
@@ -160,6 +174,11 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
     );
 
     const invalid = (message: string): UpdatePollContentResult => ({ ok: false, reason: "invalid_change", message });
+    const locked = (question: ExistingQuestion) => isQuestionLocked(question, poll.mode);
+
+    if (poll.mode === "self_service" && (input.questions.length !== 1 || input.questions[0].id !== questionRows[0]?.id)) {
+      return invalid("Anketa pro web má právě jednu otázku.");
+    }
 
     // 1) Nejdřív všechno ověřit, teprve pak zapisovat.
     const seen = new Set<number>();
@@ -171,7 +190,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         if (!current || seen.has(question.id)) return invalid(`${label}: otázka už neexistuje. Načtěte stránku znovu.`);
         seen.add(question.id);
 
-        if (isQuestionLocked(current)) {
+        if (locked(current)) {
           if (!sameLockedContent(current, question)) {
             return invalid(`${label}: otázka už byla spuštěná, její obsah nelze měnit.`);
           }
@@ -200,7 +219,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
     }
 
     const removedQuestions = [...existing.values()].filter((question) => !seen.has(question.id));
-    const lockedRemoval = removedQuestions.find(isQuestionLocked);
+    const lockedRemoval = removedQuestions.find(locked);
     if (lockedRemoval) {
       return invalid(`Otázku „${lockedRemoval.text}“ už jste spustili, nelze ji odstranit.`);
     }
@@ -218,7 +237,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
     for (const [position, question] of input.questions.entries()) {
       const current = question.id === undefined ? undefined : existing.get(question.id);
 
-      if (current && isQuestionLocked(current)) {
+      if (current && locked(current)) {
         await tx.update(questions).set({ position }).where(eq(questions.id, current.id));
         continue;
       }
@@ -271,7 +290,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
     const stillUsed = new Set(
       input.questions.map((question) => {
         const current = question.id === undefined ? undefined : existing.get(question.id);
-        return current && isQuestionLocked(current) ? current.imageUrl : question.image?.url ?? null;
+        return current && locked(current) ? current.imageUrl : question.image?.url ?? null;
       })
     );
     pollId = poll.id;

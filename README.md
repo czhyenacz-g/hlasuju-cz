@@ -47,6 +47,44 @@ Hlasování automaticky "vyprší" 30 dní po vytvoření (respektuje se při
   klávesnicí/prezentérem — mezerník = další krok, ←/→ (PageUp/PageDown)
   = otázky, R = výsledky, Q = QR kód, F = celá obrazovka, Esc = zpět.
 
+## Ankety pro web (veřejné ankety a widget)
+
+Druhý režim hlasování (`polls.mode = "self_service"`, výchozí a všechna
+historická hlasování jsou `"live"`). Vytváří se na `/pro-weby/vytvorit`.
+
+- **Jedna otázka, 2–10 odpovědí**, hlasuje se hned po vytvoření (otázka je
+  od začátku `active`) přes stejný endpoint, identitu účastníka a ochranu
+  jako živé hlasování. Moderátor anketu jen ukončí (spouštění/ukončování
+  otázek API odmítne).
+- **Úprava** jen do prvního hlasu (pak je otázka zamčená). Editace zamyká
+  řádky odpovědí (`FOR UPDATE`), takže souběžný hlas buď otázku zamkne,
+  nebo dorazí až po uložení (hlas pro smazanou odpověď skončí chybou 400).
+- **Výsledky** (`/api/polls/public/<kód>/final-results`) vidí jen ten, kdo
+  už hlasoval (nebo všichni po ukončení). **Pravidlo pro správnou odpověď:**
+  během hlasování se neprozradí nikomu (ani hlasujícímu, ani v Open Graph
+  náhledu) — zobrazí se všem až po ukončení ankety moderátorem.
+- **Platnost** 30 dní od posledního hlasu (zápis do DB nejvýš jednou denně).
+- **Stránka** `/<kód>` má vlastní Open Graph (otázka, výzva, obrázek
+  `/og/<kód>?v=<verze>` 1200×630 bez výsledků a správné odpovědi) a je
+  `noindex` (Facebook náhled načte i tak). Živá hlasování mají dál obecná
+  metadata — jejich otázky jsou před spuštěním tajné.
+- **Widget** `/embed/<kód>` (iframe): jediná route, kterou smí cizí web
+  vložit (`frame-ancestors *`); všechny ostatní stránky mají
+  `X-Frame-Options: DENY` + `frame-ancestors 'none'` (next.config.ts).
+  Bez navigace, banneru a analytiky. Když prohlížeč v iframe blokuje
+  úložiště třetích stran, widget hlasování nenabídne a odkáže na
+  hlasuju.cz (jinak by každé načtení = nové ID = další hlas).
+- **Sdílení**: obyčejné URL (Facebook sharer, WhatsApp, e-mail, Web Share
+  API na mobilu, kopírování). Žádné Graph API.
+
+**Limity ochrany (záměrně jednoduchá):** jeden hlas na prohlížeč (ID v
+localStorage) + DB unique (otázka, účastník) + nejvýš 30 hlasů za hodinu
+z jedné IP do jedné ankety. Kdo smaže data prohlížeče, použije anonymní
+okno nebo jiné zařízení/síť, může hlasovat znovu; úložiště ve widgetu je
+oddělené podle webu, kam je vložený. Výsledky jsou orientační, ne
+reprezentativní průzkum (uvedeno i v UI). Kódy jsou 6místné — kdo zkouší
+kódy, najde jen veřejné otázky a hlasovat může; výsledky bez hlasu neuvidí.
+
 ## Ochrana proti zneužití
 
 - Rate limiting je v Postgresu (tabulka `rate_limits`, fixní okna,

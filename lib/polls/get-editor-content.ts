@@ -11,7 +11,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
   const db = getDb();
 
   const [poll] = await db
-    .select({ id: polls.id, title: polls.title, publicCode: polls.publicCode, status: polls.status, version: polls.version })
+    .select({ id: polls.id, title: polls.title, publicCode: polls.publicCode, status: polls.status, version: polls.version, mode: polls.mode })
     .from(polls)
     .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
     .limit(1);
@@ -56,6 +56,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
     publicCode: poll.publicCode,
     title: poll.title,
     pollStatus: poll.status as PollStatus,
+    mode: poll.mode as EditorContent["mode"],
     version: poll.version,
     questions: questionRows.map((row) => {
       const voteCount = voteCounts.get(row.id) ?? 0;
@@ -63,7 +64,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
         id: row.id,
         text: row.text,
         status: row.status as QuestionStatus,
-        locked: isQuestionLocked({ status: row.status, voteCount }),
+        locked: isQuestionLocked({ status: row.status, voteCount }, poll.mode),
         voteCount,
         image: toQuestionImage(row),
         link: toQuestionLink(row),

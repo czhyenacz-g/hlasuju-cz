@@ -49,7 +49,16 @@ export default function Home() {
           </section>
         </div>
 
-        <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-gray-600 sm:mt-10">
+        <p className="mt-6 text-center">
+          <Link
+            href="/pro-weby"
+            className="inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-semibold text-brand-dark underline-offset-4 hover:bg-white/70 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20"
+          >
+            Hlasování a ankety pro váš web →
+          </Link>
+        </p>
+
+        <ul className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-gray-600 sm:mt-8">
           {BENEFITS.map((benefit) => (
             <li key={benefit.title} className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-pastel-green text-gray-700">

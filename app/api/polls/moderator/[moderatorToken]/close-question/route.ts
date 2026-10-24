@@ -3,7 +3,7 @@ import { closeQuestion } from "../../../../../../lib/polls/close-question.ts";
 import { LIMITS } from "../../../../../../lib/polls/limits.ts";
 import { jsonError, readJsonBody } from "../../../../../../lib/http.ts";
 
-const REASON_STATUS = { poll_not_found: 404, poll_closed: 409, question_not_active: 409 } as const;
+const REASON_STATUS = { poll_not_found: 404, poll_closed: 409, question_not_active: 409, not_live: 409 } as const;
 
 /** Ukončí hlasování u aktuální otázky (celé hlasování běží dál). */
 export async function POST(request: Request, { params }: { params: Promise<{ moderatorToken: string }> }) {

@@ -2,6 +2,8 @@ import "server-only";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, participants, polls, questions, votes } from "../../db/schema.ts";
+import { extendedExpiresAt } from "./expiry.ts";
+import { LIMITS } from "./limits.ts";
 
 export type CastVoteResult =
   | { ok: true }
@@ -42,6 +44,8 @@ export async function castVote(
       status: polls.status,
       activeQuestionId: polls.activeQuestionId,
       requireParticipantName: polls.requireParticipantName,
+      mode: polls.mode,
+      expiresAt: polls.expiresAt,
     })
     .from(polls)
     .where(and(eq(polls.publicCode, publicCode), gt(polls.expiresAt, new Date())))
@@ -74,10 +78,17 @@ export async function castVote(
   try {
     await db.insert(votes).values({ questionId, optionId, participantId });
   } catch (error) {
-    const isUniqueViolation =
-      typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "23505";
-    if (!isUniqueViolation) throw error;
+    const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: string }).code : undefined;
+    // 23503: odpověď mezitím odstranila editace veřejné ankety (před prvním hlasem).
+    if (code === "23503") return { ok: false, reason: "option_not_found" };
+    if (code !== "23505") throw error;
     // Už hlasoval(a) u týhle otázky — bereme jako úspěch (idempotentní).
+  }
+
+  // Veřejná anketa žije, dokud se hlasuje: platnost 30 dní od posledního
+  // hlasu. Zapisuje se nejvýš jednou za den, ne při každém hlasu.
+  if (poll.mode === "self_service" && poll.expiresAt.getTime() < Date.now() + (LIMITS.POLL_TTL_DAYS - 1) * 24 * 60 * 60 * 1000) {
+    await db.update(polls).set({ expiresAt: extendedExpiresAt() }).where(eq(polls.id, poll.id));
   }
 
   return { ok: true };

@@ -1,0 +1,1 @@
+ALTER TABLE "polls" ADD COLUMN "mode" varchar(20) DEFAULT 'live' NOT NULL;

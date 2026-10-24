@@ -25,6 +25,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       activeQuestionId: polls.activeQuestionId,
       email: polls.email,
       requireParticipantName: polls.requireParticipantName,
+      mode: polls.mode,
       resultsEmailSentAt: polls.resultsEmailSentAt,
       resultsEmailCount: polls.resultsEmailCount,
     })
@@ -94,6 +95,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
     title: poll.title,
     publicCode: poll.publicCode,
     requireParticipantName: poll.requireParticipantName,
+    mode: poll.mode as ModeratorPollView["mode"],
     pollStatus: poll.status as ModeratorPollView["pollStatus"],
     activeQuestionId: poll.activeQuestionId,
     questions: questionViews,

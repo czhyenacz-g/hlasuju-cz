@@ -253,11 +253,19 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
   const questions = validateQuestions(body.questions, "create");
   if (!questions.ok) return questions;
 
+  const mode = body.mode === undefined || body.mode === "live" ? "live" : body.mode === "self_service" ? "self_service" : null;
+  if (!mode) return { ok: false, error: "Neplatný typ hlasování." };
+  if (mode === "self_service") {
+    if (questions.value.length !== 1) return { ok: false, error: "Anketa pro web má právě jednu otázku." };
+    if (body.requireParticipantName === true) return { ok: false, error: "Anketa pro web je vždy anonymní." };
+  }
+
   return {
     ok: true,
     value: {
       title: title.value,
       email,
+      mode,
       requireParticipantName: body.requireParticipantName === true,
       questions: questions.value.map((q) => ({
         text: q.text,

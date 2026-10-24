@@ -37,6 +37,7 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
             moderatorToken,
             email: input.email ?? null,
             requireParticipantName: input.requireParticipantName ?? false,
+            mode: input.mode ?? "live",
             status: "active",
             expiresAt,
           })
@@ -50,7 +51,8 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
               pollId: poll.id,
               text: question.text,
               position: index,
-              status: "prepared",
+              // Veřejná anketa přijímá hlasy hned po vytvoření.
+              status: input.mode === "self_service" ? "active" : "prepared",
               linkUrl: question.link?.url ?? null,
               linkLabel: question.link?.label ?? null,
               linkShowDuringVoting: question.link?.showDuringVoting ?? false,
@@ -73,6 +75,9 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
           if (correct) {
             await tx.update(questions).set({ correctOptionId: correct.id }).where(eq(questions.id, insertedQuestion.id));
           }
+        }
+        if (input.mode === "self_service") {
+          await tx.update(polls).set({ activeQuestionId: questionIds[0] }).where(eq(polls.id, poll.id));
         }
       });
 

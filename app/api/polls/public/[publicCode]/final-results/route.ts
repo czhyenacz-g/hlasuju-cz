@@ -14,10 +14,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ publ
   if (!result.ok) {
     // 409 = hlasování existuje, ale výsledky ještě nejsou veřejné. Žádná
     // data o otázkách se v odpovědi nevrací.
-    return result.reason === "poll_not_found"
-      ? jsonError("Hlasování nenalezeno.", 404)
-      : jsonError("Výsledky budou dostupné po ukončení hlasování.", 409);
+    if (result.reason === "poll_not_found") return jsonError("Hlasování nenalezeno.", 404);
+    if (result.reason === "not_voted") return jsonError("Výsledky uvidíte po odeslání hlasu.", 403);
+    return jsonError("Výsledky budou dostupné po ukončení hlasování.", 409);
   }
 
-  return NextResponse.json(result.results);
+  // Odpověď závisí na participantId — nikdy ji nesdílet přes CDN.
+  return NextResponse.json(result.results, { headers: { "Cache-Control": "private, no-store" } });
 }

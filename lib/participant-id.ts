@@ -24,3 +24,19 @@ export function getOrCreateParticipantId(): string {
     return crypto.randomUUID();
   }
 }
+
+/**
+ * Jako getOrCreateParticipantId, ale vrátí null, když prohlížeč úložiště
+ * neumožňuje (typicky widget v cizím iframe s blokovaným úložištěm třetích
+ * stran). Veřejná anketa pak hlasování v okně nenabídne — jinak by každé
+ * načtení stránky znamenalo nové ID a možnost hlasovat znovu.
+ */
+export function getPersistentParticipantId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const id = getOrCreateParticipantId();
+    return window.localStorage.getItem(STORAGE_KEY) === id ? id : null;
+  } catch {
+    return null;
+  }
+}

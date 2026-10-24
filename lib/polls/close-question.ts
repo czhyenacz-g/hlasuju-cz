@@ -5,7 +5,7 @@ import { polls, questions } from "../../db/schema.ts";
 
 export type CloseQuestionResult =
   | { ok: true }
-  | { ok: false; reason: "poll_not_found" | "poll_closed" | "question_not_active" };
+  | { ok: false; reason: "poll_not_found" | "poll_closed" | "question_not_active" | "not_live" };
 
 /**
  * Ukončí hlasování u aktuální otázky, ale celé hlasování nechá běžet.
@@ -17,7 +17,7 @@ export type CloseQuestionResult =
 export async function closeQuestion(moderatorToken: string, questionId: number): Promise<CloseQuestionResult> {
   return getDb().transaction(async (tx): Promise<CloseQuestionResult> => {
     const [poll] = await tx
-      .select({ id: polls.id, status: polls.status, activeQuestionId: polls.activeQuestionId })
+      .select({ id: polls.id, mode: polls.mode, status: polls.status, activeQuestionId: polls.activeQuestionId })
       .from(polls)
       .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
       .limit(1)
@@ -25,6 +25,8 @@ export async function closeQuestion(moderatorToken: string, questionId: number):
 
     if (!poll) return { ok: false, reason: "poll_not_found" };
     if (poll.status !== "active") return { ok: false, reason: "poll_closed" };
+    // Veřejná anketa má jedinou otázku aktivní po celou dobu — jen „Ukončit“.
+    if (poll.mode !== "live") return { ok: false, reason: "not_live" };
     if (poll.activeQuestionId !== questionId) return { ok: false, reason: "question_not_active" };
 
     await tx

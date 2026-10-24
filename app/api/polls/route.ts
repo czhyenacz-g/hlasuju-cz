@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
         title: validated.value.title ?? null,
         publicCode,
         moderatorToken,
+        mode: validated.value.mode,
       });
     });
   }

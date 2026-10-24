@@ -6,7 +6,7 @@ import { extendedExpiresAt } from "./expiry.ts";
 
 export type ActivateQuestionResult =
   | { ok: true }
-  | { ok: false; reason: "poll_not_found" | "poll_closed" | "question_not_found" };
+  | { ok: false; reason: "poll_not_found" | "poll_closed" | "question_not_found" | "not_live" };
 
 /**
  * Aktivuje otázku pro účastníky — nejdřív ukončí případnou dřív
@@ -26,7 +26,7 @@ export type ActivateQuestionResult =
 export async function activateQuestion(moderatorToken: string, questionId: number): Promise<ActivateQuestionResult> {
   return getDb().transaction(async (tx): Promise<ActivateQuestionResult> => {
     const [poll] = await tx
-      .select({ id: polls.id, status: polls.status })
+      .select({ id: polls.id, mode: polls.mode, status: polls.status })
       .from(polls)
       .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
       .limit(1)
@@ -34,6 +34,8 @@ export async function activateQuestion(moderatorToken: string, questionId: numbe
 
     if (!poll) return { ok: false, reason: "poll_not_found" };
     if (poll.status !== "active") return { ok: false, reason: "poll_closed" };
+    // Veřejná anketa má jedinou otázku aktivní po celou dobu — jen „Ukončit“.
+    if (poll.mode !== "live") return { ok: false, reason: "not_live" };
 
     const [question] = await tx
       .select({ id: questions.id })

@@ -1,5 +1,7 @@
 export type PollStatus = "active" | "closed";
 export type QuestionStatus = "prepared" | "active" | "ended";
+/** "live" = živé hlasování s moderátorem, "self_service" = veřejná anketa (jedna otázka, hlasuje se hned). */
+export type PollMode = "live" | "self_service";
 
 export type QuestionImage = { url: string; width: number; height: number; alt: string | null };
 export type QuestionLink = { url: string; label: string | null; showDuringVoting: boolean };
@@ -17,6 +19,8 @@ export type CreatePollInput = {
   email?: string;
   /** Jmenovitý režim (jen při vytvoření; výchozí false = anonymní). */
   requireParticipantName?: boolean;
+  /** Výchozí "live"; "self_service" jen s jedinou otázkou. */
+  mode?: PollMode;
   questions: CreatePollQuestionInput[];
 };
 
@@ -50,6 +54,7 @@ export type PublicQuestionLink = { url: string; label: string | null };
 export type PublicPollView = {
   title: string | null;
   pollStatus: PollStatus;
+  mode: PollMode;
   /** Jen příznak — jména účastníků veřejné API nikdy nevrací. */
   requireParticipantName: boolean;
   activeQuestion: {
@@ -87,6 +92,7 @@ export type ModeratorPollView = {
   title: string | null;
   publicCode: string;
   requireParticipantName: boolean;
+  mode: PollMode;
   pollStatus: PollStatus;
   activeQuestionId: number | null;
   questions: ModeratorQuestionView[];
@@ -113,6 +119,7 @@ export type EditorContent = {
   publicCode: string;
   title: string | null;
   pollStatus: PollStatus;
+  mode: PollMode;
   version: number;
   questions: EditorQuestion[];
 };
@@ -135,6 +142,7 @@ export type FinalResultsQuestion = {
 export type FinalResultsView = {
   title: string | null;
   pollStatus: PollStatus;
+  mode: PollMode;
   questions: FinalResultsQuestion[];
 };
 

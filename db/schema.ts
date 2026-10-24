@@ -43,6 +43,10 @@ export const polls = pgTable(
     // Jmenovitý režim: účastník musí před hlasováním zadat jméno/přezdívku
     // (tabulka participants). Nastavuje se jen při vytvoření, pak se nemění.
     requireParticipantName: boolean("require_participant_name").notNull().default(false),
+    // "live" = živé hlasování s moderátorem (výchozí, všechna historická),
+    // "self_service" = veřejná anketa pro web: jedna otázka, hlasuje se
+    // hned od vytvoření bez moderátora. Nastavuje se jen při vytvoření.
+    mode: varchar("mode", { length: 20 }).notNull().default("live"),
   },
   (table) => [
     uniqueIndex("polls_public_code_unique").on(table.publicCode),

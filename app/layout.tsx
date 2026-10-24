@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Script from "next/script";
 import SiteAnalytics from "../components/SiteAnalytics.tsx";
 import { GOATCOUNTER_CODE } from "./config/analytics.ts";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "./config/site.ts";
@@ -36,14 +35,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="cs">
       <body className="min-h-screen bg-cream text-gray-900 antialiased">
         {children}
-        <SiteAnalytics />
-        {GOATCOUNTER_CODE && (
-          <Script
-            data-goatcounter={`https://${GOATCOUNTER_CODE}.goatcounter.com/count`}
-            src="//gc.zgo.at/count.js"
-            strategy="afterInteractive"
-          />
-        )}
+        <SiteAnalytics goatcounterCode={GOATCOUNTER_CODE || undefined} />
       </body>
     </html>
   );

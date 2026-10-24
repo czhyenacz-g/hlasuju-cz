@@ -3,7 +3,7 @@ import { activateQuestion } from "../../../../../../lib/polls/activate-question.
 import { LIMITS } from "../../../../../../lib/polls/limits.ts";
 import { jsonError, readJsonBody } from "../../../../../../lib/http.ts";
 
-const REASON_STATUS = { poll_not_found: 404, poll_closed: 409, question_not_found: 400 } as const;
+const REASON_STATUS = { poll_not_found: 404, poll_closed: 409, question_not_found: 400, not_live: 409 } as const;
 
 export async function POST(request: Request, { params }: { params: Promise<{ moderatorToken: string }> }) {
   const { moderatorToken } = await params;

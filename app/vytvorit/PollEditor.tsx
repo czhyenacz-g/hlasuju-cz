@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { LIMITS } from "../../lib/polls/limits.ts";
+import type { PollMode } from "../../lib/polls/types.ts";
 import { normalizeLinkUrl } from "../../lib/polls/validate.ts";
 import { IMAGE_ACCEPT_ATTRIBUTE, prepareImage } from "../../lib/images/prepare-image.ts";
 import type { EditorContent, EditorQuestion, QuestionImage } from "../../lib/polls/types.ts";
@@ -40,7 +41,7 @@ type SaveStatus =
   | { kind: "conflict"; message: string };
 
 export type PollEditorProps =
-  | { mode: "create"; imagesEnabled: boolean }
+  | { mode: "create"; imagesEnabled: boolean; pollMode?: PollMode }
   | { mode: "edit"; imagesEnabled: boolean; moderatorToken: string; initial: EditorContent; uploadFailed?: boolean };
 
 function makeKey() {
@@ -158,6 +159,8 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
 export default function PollEditor(props: PollEditorProps) {
   const router = useRouter();
   const isEdit = props.mode === "edit";
+  // Veřejná anketa pro web: jediná otázka, bez jmenovitého režimu.
+  const selfService = (isEdit ? props.initial.mode : props.pollMode) === "self_service";
   const [title, setTitle] = useState(isEdit ? props.initial.title ?? "" : "");
   const [email, setEmail] = useState("");
   const [requireParticipantName, setRequireParticipantName] = useState(false);
@@ -335,7 +338,8 @@ export default function PollEditor(props: PollEditorProps) {
       body: JSON.stringify({
         title: title.trim() || undefined,
         email: email.trim() || undefined,
-        requireParticipantName,
+        requireParticipantName: selfService ? false : requireParticipantName,
+        mode: selfService ? "self_service" : undefined,
         website: honeypot,
         questions: questions.map((q) => {
           const payload = toPayloadQuestion(q, new Map());
@@ -426,7 +430,7 @@ export default function PollEditor(props: PollEditorProps) {
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       <div className={`grid gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-soft sm:p-6 ${isEdit ? "" : "sm:grid-cols-2"}`}>
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-gray-700">Název hlasování (nepovinné)</span>
+          <span className="text-sm font-medium text-gray-700">{selfService ? "Název ankety (nepovinné)" : "Název hlasování (nepovinné)"}</span>
           <input
             type="text"
             value={title}
@@ -456,7 +460,7 @@ export default function PollEditor(props: PollEditorProps) {
             </span>
           </label>
         )}
-        {!isEdit && (
+        {!isEdit && !selfService && (
           <label className="flex items-start gap-3 rounded-2xl bg-cream px-4 py-3 sm:col-span-2">
             <input
               type="checkbox"
@@ -499,6 +503,7 @@ export default function PollEditor(props: PollEditorProps) {
             question={q}
             index={index}
             total={questions.length}
+            single={selfService}
             imagesEnabled={props.imagesEnabled}
             disabled={saving}
             onToggle={() => toggleQuestion(q.key)}
@@ -514,14 +519,16 @@ export default function PollEditor(props: PollEditorProps) {
         ))}
       </ol>
 
-      <button
-        type="button"
-        onClick={addQuestion}
-        disabled={questions.length >= LIMITS.MAX_QUESTIONS || saving}
-        className="rounded-3xl border-2 border-dashed border-brand/30 bg-white/60 px-5 py-4 text-sm font-semibold text-brand transition hover:border-brand hover:bg-brand-light/50 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        + Přidat otázku
-      </button>
+      {!selfService && (
+        <button
+          type="button"
+          onClick={addQuestion}
+          disabled={questions.length >= LIMITS.MAX_QUESTIONS || saving}
+          className="rounded-3xl border-2 border-dashed border-brand/30 bg-white/60 px-5 py-4 text-sm font-semibold text-brand transition hover:border-brand hover:bg-brand-light/50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          + Přidat otázku
+        </button>
+      )}
 
       {/* Ukládací lišta je pořád na očích i u dlouhého seznamu otázek. */}
       <div className="sticky bottom-0 z-10 -mx-4 border-t border-gray-200 bg-white/95 px-4 py-4 shadow-[0_-8px_24px_-12px_rgba(76,64,150,0.25)] backdrop-blur sm:bottom-3 sm:mx-0 sm:rounded-2xl sm:border">
@@ -550,7 +557,7 @@ export default function PollEditor(props: PollEditorProps) {
               disabled={saving || (isEdit && !dirty)}
               className="min-h-[52px] rounded-2xl bg-brand px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/30 disabled:opacity-60"
             >
-              {saving ? "Ukládám…" : isEdit ? "Uložit změny" : "Vytvořit hlasování"}
+              {saving ? "Ukládám…" : isEdit ? "Uložit změny" : selfService ? "Vytvořit anketu" : "Vytvořit hlasování"}
             </button>
           </div>
         </div>
@@ -602,6 +609,7 @@ function QuestionCard({
   onRemoveImage,
   onDuplicate,
   onRemove,
+  single = false,
   onMoveUp,
   onMoveDown,
 }: {
@@ -617,6 +625,8 @@ function QuestionCard({
   onRemoveImage: () => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  /** Anketa pro web: jediná otázka — bez přesunu, duplikace a mazání. */
+  single?: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
@@ -641,19 +651,23 @@ function QuestionCard({
           </span>
         )}
         <div className="flex flex-wrap items-center gap-1">
-          <button type="button" onClick={onMoveUp} disabled={disabled || index === 0} className={actionClass} aria-label="Posunout nahoru">
-            ↑
-          </button>
-          <button type="button" onClick={onMoveDown} disabled={disabled || index === total - 1} className={actionClass} aria-label="Posunout dolů">
-            ↓
-          </button>
-          <button type="button" onClick={onDuplicate} disabled={disabled} className={actionClass}>
-            Duplikovat
-          </button>
-          {!question.locked && (
-            <button type="button" onClick={onRemove} disabled={disabled || total <= 1} className={`${actionClass} text-red-600 hover:text-red-700`}>
-              Odstranit
+          {!single && (
+            <>
+            <button type="button" onClick={onMoveUp} disabled={disabled || index === 0} className={actionClass} aria-label="Posunout nahoru">
+              ↑
             </button>
+            <button type="button" onClick={onMoveDown} disabled={disabled || index === total - 1} className={actionClass} aria-label="Posunout dolů">
+              ↓
+            </button>
+            <button type="button" onClick={onDuplicate} disabled={disabled} className={actionClass}>
+              Duplikovat
+            </button>
+            {!question.locked && (
+              <button type="button" onClick={onRemove} disabled={disabled || total <= 1} className={`${actionClass} text-red-600 hover:text-red-700`}>
+                Odstranit
+              </button>
+            )}
+            </>
           )}
           <button type="button" onClick={onToggle} className="rounded-lg px-2 py-1 text-sm font-semibold text-brand hover:bg-brand/5">
             {question.expanded ? "Sbalit" : question.locked ? "Zobrazit" : "Upravit"}
