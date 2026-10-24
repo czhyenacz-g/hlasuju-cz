@@ -450,6 +450,10 @@ export default function PollEditor(props: PollEditorProps) {
               placeholder="vas@email.cz"
               className="rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
             />
+            <span className="text-xs text-gray-500">
+              Doporučujeme vyplnit — odkaz na správu jinak nejde obnovit. Hlasování platí {LIMITS.POLL_TTL_DAYS} dní od vytvoření a po
+              každém spuštění otázky se platnost prodlouží na {LIMITS.POLL_TTL_DAYS} dní od toho okamžiku.
+            </span>
           </label>
         )}
         {!isEdit && (
@@ -464,7 +468,7 @@ export default function PollEditor(props: PollEditorProps) {
               <span className="block text-sm font-medium text-gray-800">Vyžadovat jméno nebo přezdívku účastníka</span>
               <span className="block text-xs text-gray-500">
                 Účastníci před hlasováním zadají jméno nebo přezdívku a vy uvidíte, kdo jak odpověděl. Bez zaškrtnutí je hlasování
-                anonymní. Po vytvoření už nejde změnit. Jména se smažou nejpozději {LIMITS.POLL_TTL_DAYS + 7} dní po vytvoření hlasování.
+                anonymní. Po vytvoření už nejde změnit. Jména se smažou nejpozději {LIMITS.POLL_TTL_DAYS + 7} dní po posledním použití hlasování.
               </span>
             </span>
           </label>

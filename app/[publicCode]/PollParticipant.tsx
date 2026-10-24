@@ -322,8 +322,8 @@ function NameForm({
           {pending ? "Ukládám…" : "Pokračovat"}
         </button>
         <p className="mt-4 text-xs text-gray-500">
-          Nemusíte uvádět skutečné jméno. Jméno vidí jen moderátor tohoto hlasování, ostatní účastníci ne. Smaže se nejpozději{" "}
-          {LIMITS.POLL_TTL_DAYS + 7} dní po vytvoření hlasování.
+          Nemusíte uvádět skutečné jméno. Jméno vidí jen moderátor tohoto hlasování, ostatní účastníci ne. Smaže se 7 dní po skončení platnosti hlasování
+          (nejpozději {LIMITS.POLL_TTL_DAYS + 7} dní po jeho posledním použití).
         </p>
       </form>
     </main>

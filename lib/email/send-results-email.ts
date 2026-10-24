@@ -116,7 +116,7 @@ export function buildResultsEmail(input: ResultsEmailInput) {
 <p style="margin:0 0 20px;font-size:15px;color:${MUTED}">${escapeHtml(date)} · kód ${escapeHtml(input.publicCode)} · účastníků: <strong style="color:inherit">${input.uniqueParticipants}</strong></p>
 ${questionsHtml || `<p style="font-size:15px">Žádná otázka nebyla spuštěna.</p>`}
 <p style="margin:8px 0 6px">${button(resultsUrl, "Zobrazit výsledky na webu")}</p>
-<p style="margin:0;font-size:13px;color:${MUTED}">Výsledky jsou na webu dostupné ${LIMITS.POLL_TTL_DAYS} dní od vytvoření hlasování. ${input.responses ? "V příloze jsou tabulky (CSV) pro Excel: souhrn a jmenovité odpovědi účastníků (osobní údaje – nepřeposílejte je dál)." : "V příloze je tabulka (CSV) pro Excel."}</p>`,
+<p style="margin:0;font-size:13px;color:${MUTED}">Výsledky jsou na webu dostupné nejméně ${LIMITS.POLL_TTL_DAYS} dní od ukončení hlasování. ${input.responses ? "V příloze jsou tabulky (CSV) pro Excel: souhrn a jmenovité odpovědi účastníků (osobní údaje – nepřeposílejte je dál)." : "V příloze je tabulka (CSV) pro Excel."}</p>`,
   });
 
   const text = [

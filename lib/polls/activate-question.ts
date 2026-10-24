@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { polls, questions } from "../../db/schema.ts";
+import { extendedExpiresAt } from "./expiry.ts";
 
 export type ActivateQuestionResult =
   | { ok: true }
@@ -49,7 +50,7 @@ export async function activateQuestion(moderatorToken: string, questionId: numbe
 
     await tx.update(questions).set({ status: "active" }).where(eq(questions.id, questionId));
 
-    await tx.update(polls).set({ activeQuestionId: questionId }).where(eq(polls.id, poll.id));
+    await tx.update(polls).set({ activeQuestionId: questionId, expiresAt: extendedExpiresAt() }).where(eq(polls.id, poll.id));
 
     return { ok: true };
   });
