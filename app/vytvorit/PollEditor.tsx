@@ -160,6 +160,7 @@ export default function PollEditor(props: PollEditorProps) {
   const isEdit = props.mode === "edit";
   const [title, setTitle] = useState(isEdit ? props.initial.title ?? "" : "");
   const [email, setEmail] = useState("");
+  const [requireParticipantName, setRequireParticipantName] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const [version, setVersion] = useState(isEdit ? props.initial.version : 1);
   const [questions, setQuestions] = useState<QuestionDraft[]>(() =>
@@ -334,10 +335,11 @@ export default function PollEditor(props: PollEditorProps) {
       body: JSON.stringify({
         title: title.trim() || undefined,
         email: email.trim() || undefined,
+        requireParticipantName,
         website: honeypot,
         questions: questions.map((q) => {
           const payload = toPayloadQuestion(q, new Map());
-          return { text: payload.text, options: payload.options, link: payload.link };
+          return { text: payload.text, options: payload.options, link: payload.link, correctOptionIndex: payload.correctOptionIndex };
         }),
       }),
     });
@@ -448,6 +450,23 @@ export default function PollEditor(props: PollEditorProps) {
               placeholder="vas@email.cz"
               className="rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
             />
+          </label>
+        )}
+        {!isEdit && (
+          <label className="flex items-start gap-3 rounded-2xl bg-cream px-4 py-3 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={requireParticipantName}
+              onChange={(e) => setRequireParticipantName(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-800">Vyžadovat jméno nebo přezdívku účastníka</span>
+              <span className="block text-xs text-gray-500">
+                Účastníci před hlasováním zadají jméno nebo přezdívku a vy uvidíte, kdo jak odpověděl. Bez zaškrtnutí je hlasování
+                anonymní. Po vytvoření už nejde změnit. Jména se smažou nejpozději {LIMITS.POLL_TTL_DAYS + 7} dní po vytvoření hlasování.
+              </span>
+            </span>
           </label>
         )}
         {/* Honeypot proti botům — člověk pole nevidí. */}

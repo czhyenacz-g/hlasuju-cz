@@ -36,6 +36,13 @@
       "when": 1792858322920,
       "tag": "0004_correct_option",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792864224216,
+      "tag": "0005_participants",
+      "breakpoints": true
     }
   ]
 }

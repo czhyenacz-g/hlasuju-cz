@@ -15,6 +15,8 @@ export type CreatePollQuestionInput = {
 export type CreatePollInput = {
   title?: string;
   email?: string;
+  /** Jmenovitý režim (jen při vytvoření; výchozí false = anonymní). */
+  requireParticipantName?: boolean;
   questions: CreatePollQuestionInput[];
 };
 
@@ -48,6 +50,8 @@ export type PublicQuestionLink = { url: string; label: string | null };
 export type PublicPollView = {
   title: string | null;
   pollStatus: PollStatus;
+  /** Jen příznak — jména účastníků veřejné API nikdy nevrací. */
+  requireParticipantName: boolean;
   activeQuestion: {
     id: number;
     text: string;
@@ -82,6 +86,7 @@ export type ModeratorQuestionView = {
 export type ModeratorPollView = {
   title: string | null;
   publicCode: string;
+  requireParticipantName: boolean;
   pollStatus: PollStatus;
   activeQuestionId: number | null;
   questions: ModeratorQuestionView[];
@@ -131,4 +136,14 @@ export type FinalResultsView = {
   title: string | null;
   pollStatus: PollStatus;
   questions: FinalResultsQuestion[];
+};
+
+/** Řádek detailu odpovědí (jen moderátor). `label` = jméno, nebo „Anonymní účastník N“. */
+export type QuestionResponseRow = { label: string; optionText: string; correct: boolean | null };
+
+export type QuestionResponsesPage = {
+  questionId: number;
+  total: number;
+  offset: number;
+  rows: QuestionResponseRow[];
 };

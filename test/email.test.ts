@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { routeParams, setupTestDb, jsonRequest } from "./helpers/db.ts";
 import { activate, closeQuestion, createPoll, endPoll, getModerator, getPublic, SAMPLE_QUESTIONS, vote } from "./helpers/polls.ts";
+import * as participantRoute from "../app/api/polls/public/[publicCode]/participant/route.ts";
 import * as resultsEmailRoute from "../app/api/polls/moderator/[moderatorToken]/results-email/route.ts";
 import { polls } from "../db/schema.ts";
 import { buildPollCreatedEmail, POLL_CREATED_SUBJECT } from "../lib/email/send-poll-created-email.ts";
@@ -182,6 +183,30 @@ describe("e-mail s výsledky", () => {
     assert.equal(email.attachments?.[0]?.filename, `vysledky-${publicCode}.csv`);
   });
 
+  test("jmenovité hlasování: druhá příloha s jmény; anonymní jen souhrn", async () => {
+    const { body } = await createPoll({ title: "Jmenovitý", email: "moderator@example.test", requireParticipantName: true, questions: SAMPLE_QUESTIONS });
+    const token: string = body.moderatorToken;
+    const [q1] = body.questionIds as number[];
+    const { body: mod } = await getModerator(token);
+    await activate(token, q1);
+    await registerName(body.publicCode, "p1", "=Jana");
+    await vote(body.publicCode, q1, mod.questions[0].options[0].id, "p1");
+    await endPoll(token);
+    sent.length = 0;
+    assert.equal((await sendViaRoute(token)).status, 200);
+    const [email] = sent;
+    assert.deepEqual(email.attachments?.map((a) => a.filename), [`vysledky-${body.publicCode}.csv`, `odpovedi-${body.publicCode}.csv`]);
+    const raw = email.attachments?.[1].content as { data?: number[] } | string;
+    const csv = typeof raw === "string" ? Buffer.from(raw, "base64").toString("utf8") : Buffer.from(raw.data ?? []).toString("utf8");
+    assert.match(csv, /'=Jana;Odřenina/, "CSV injection ochrana i u jmen");
+    assert.match(email.text + email.html, /jmenovité odpovědi/);
+
+    const anonymous = await closedPollWithVotes();
+    sent.length = 0;
+    await sendViaRoute(anonymous.token);
+    assert.equal(sent[0].attachments?.length, 1);
+  });
+
   test("bez platného tokenu nic neodejde", async () => {
     const response = await sendViaRoute("x".repeat(43));
     assert.equal(response.status, 404);
@@ -281,3 +306,7 @@ describe("e-mail s výsledky", () => {
     assert.match(email.text, /24\. 10\. 2026/);
   });
 });
+
+async function registerName(code: string, participantId: string, name: string) {
+  return participantRoute.POST(jsonRequest("/x", "POST", { participantId, name }), routeParams({ publicCode: code }));
+}

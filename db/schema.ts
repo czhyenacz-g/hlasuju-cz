@@ -40,6 +40,9 @@ export const polls = pgTable(
     // kolikrát — brání opakovanému odesílání na adresu moderátora.
     resultsEmailSentAt: timestamp("results_email_sent_at", { withTimezone: true }),
     resultsEmailCount: integer("results_email_count").notNull().default(0),
+    // Jmenovitý režim: účastník musí před hlasováním zadat jméno/přezdívku
+    // (tabulka participants). Nastavuje se jen při vytvoření, pak se nemění.
+    requireParticipantName: boolean("require_participant_name").notNull().default(false),
   },
   (table) => [
     uniqueIndex("polls_public_code_unique").on(table.publicCode),
@@ -90,6 +93,24 @@ export const options = pgTable(
     position: integer("position").notNull(),
   },
   (table) => [index("options_question_id_idx").on(table.questionId)]
+);
+
+// Jména/přezdívky účastníků jmenovitých hlasování — osobní údaj, vidí
+// ho jen moderátor. Jeden řádek na (hlasování, participantId), ne ke
+// každému hlasu. Maže se denním úklidem po vypršení hlasování
+// (lib/maintenance/cleanup.ts).
+export const participants = pgTable(
+  "participants",
+  {
+    id: serial("id").primaryKey(),
+    pollId: integer("poll_id")
+      .notNull()
+      .references(() => polls.id, { onDelete: "cascade" }),
+    participantId: varchar("participant_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 40 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("participants_poll_participant_unique").on(table.pollId, table.participantId)]
 );
 
 export const votes = pgTable(

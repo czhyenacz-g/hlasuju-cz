@@ -8,8 +8,11 @@ import type { ModeratorPollView } from "../../../lib/polls/types.ts";
 export default function ResultsEmailButton({
   moderatorToken,
   resultsEmail,
+  named = false,
   onSent,
 }: {
+  /** Jmenovité hlasování: e-mail obsahuje i jména účastníků. */
+  named?: boolean;
   moderatorToken: string;
   resultsEmail: ModeratorPollView["resultsEmail"];
   onSent: () => void;
@@ -69,6 +72,11 @@ export default function ResultsEmailButton({
             ? `Naposledy odesláno ${new Date(resultsEmail.lastSentAt).toLocaleString("cs-CZ")} na ${resultsEmail.to}.`
             : `Přijde na ${resultsEmail.to}, i s tabulkou CSV.`}
       </p>
+      {named && (
+        <p className="text-sm text-gray-700">
+          Hlasování je jmenovité: e-mail bude obsahovat i druhou tabulku se <strong>jmény účastníků a jejich odpověďmi</strong>.
+        </p>
+      )}
       {message && (
         <p role="status" className={message.tone === "ok" ? "text-sm text-emerald-700" : "text-sm text-red-700"}>
           {message.text}

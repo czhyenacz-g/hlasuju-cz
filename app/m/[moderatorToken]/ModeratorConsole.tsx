@@ -6,10 +6,9 @@ import { usePolling } from "../../../lib/use-polling.ts";
 import QrCode from "../../../components/QrCode.tsx";
 import QuestionImage from "../../../components/QuestionImage.tsx";
 import QuestionLink from "../../../components/QuestionLink.tsx";
-import ResultsBarChart, { votesLabel } from "../../../components/ResultsBarChart.tsx";
 import AlphegaAffiliateBanner from "../../../components/AlphegaAffiliateBanner.tsx";
 import PresentationView from "./PresentationView.tsx";
-import ResultsEmailButton from "./ResultsEmailButton.tsx";
+import ModeratorFinalSummary from "./ModeratorFinalSummary.tsx";
 import { PrimaryQuestionAction, QuestionStatusBadge, type ModeratorAction } from "./QuestionControls.tsx";
 import type { ModeratorPollView } from "../../../lib/polls/types.ts";
 
@@ -112,14 +111,20 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
   }
 
   function endWholePoll() {
+    const stillActive = poll?.questions.some((q) => q.status === "active");
     if (
       window.confirm(
-        "Ukončit celé hlasování? Účastníci uvidí finální výsledky. Tuto akci nelze vrátit — hlasovat ani upravovat otázky už pak nepůjde."
+        (stillActive ? "Některá otázka je ještě otevřená pro hlasování — ukončením se uzavře. " : "") +
+          "Ukončit celé hlasování? Účastníci uvidí finální výsledky. Tuto akci nelze vrátit — hlasovat ani upravovat otázky už pak nepůjde."
       )
     ) {
       void runAction("end");
     }
   }
+
+  // Po poslední otázce (nebo když už nic nečeká na spuštění) nabídnout výrazné ukončení.
+  const nothingLeft = poll.questions.length > 0 && poll.questions.every((q) => q.status !== "prepared");
+  const onLastQuestion = cursorIndex === poll.questions.length - 1 && question?.status !== "prepared";
 
   if (poll.pollStatus === "closed") {
     return (
@@ -296,11 +301,22 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         </ol>
       </section>
 
-      <div className="mt-6 flex justify-end">
-        <button type="button" onClick={endWholePoll} disabled={actionPending} className="text-sm font-semibold text-red-600 hover:underline disabled:opacity-60">
-          Ukončit celé hlasování…
+      {nothingLeft || onLastQuestion ? (
+        <button
+          type="button"
+          onClick={endWholePoll}
+          disabled={actionPending}
+          className="mt-6 min-h-[52px] w-full rounded-2xl bg-brand px-6 text-base font-semibold text-white shadow-soft transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/30 disabled:opacity-60"
+        >
+          Ukončit hlasování a zobrazit souhrn
         </button>
-      </div>
+      ) : (
+        <div className="mt-6 flex justify-end">
+          <button type="button" onClick={endWholePoll} disabled={actionPending} className="text-sm font-semibold text-red-600 hover:underline disabled:opacity-60">
+            Ukončit celé hlasování…
+          </button>
+        </div>
+      )}
 
       {/* compact, vždy pod řízením hlasování — moderátor tuhle obrazovku
           typicky sdílí na projektoru, banner nesmí být sticky/nápadný. */}
@@ -308,91 +324,6 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         <AlphegaAffiliateBanner variant="compact" />
       </div>
     </main>
-  );
-}
-
-// Jakmile je poll "closed", tohle nahradí celou řídicí obrazovku —
-// hlavní výsledky mají vždy přednost (viz zadání), žádné tlačítko
-// "Zobrazit výsledky" pro dílčí náhled tu už nedává smysl.
-function ModeratorFinalSummary({
-  poll,
-  moderatorToken,
-  onEmailSent,
-  onCopyLink,
-  copyLabel,
-}: {
-  poll: ModeratorPollView;
-  moderatorToken: string;
-  onEmailSent: () => void;
-  onCopyLink: () => void;
-  copyLabel: string;
-}) {
-  const averageVotes = poll.questions.length > 0 ? Math.round(poll.totalVotes / poll.questions.length) : 0;
-
-  return (
-    <main className="mx-auto min-h-screen max-w-2xl px-4 py-10">
-      <h1 className="text-3xl font-bold text-gray-900">Výsledky hlasování</h1>
-      {poll.title && <p className="mt-1 text-lg text-gray-600">{poll.title}</p>}
-      <p className="mt-1 text-sm text-gray-500">hlasuju.cz/{poll.publicCode}</p>
-
-      <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Počet otázek" value={poll.questions.length} />
-        <Stat label="Unikátní účastníci" value={poll.uniqueParticipants} />
-        <Stat label="Celkem hlasů" value={poll.totalVotes} />
-        <Stat label="Průměr na otázku" value={averageVotes} />
-      </dl>
-
-      <button
-        type="button"
-        onClick={onCopyLink}
-        className="mt-6 rounded-xl border-2 border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-800 hover:border-brand hover:text-brand"
-      >
-        {copyLabel}
-      </button>
-
-      <section className="mt-6 rounded-3xl border border-gray-200 bg-pastel-blue/60 p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Výsledky e-mailem</h2>
-        <div className="mt-3">
-          <ResultsEmailButton moderatorToken={moderatorToken} resultsEmail={poll.resultsEmail} onSent={onEmailSent} />
-        </div>
-      </section>
-
-      <div className="mt-8 flex flex-col gap-5">
-        {poll.questions.map((q, index) => (
-          <section key={q.id} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-soft">
-            <h2 className="text-xl font-bold text-gray-900">
-              {index + 1}. {q.text}
-            </h2>
-            {q.status === "prepared" && <p className="mt-1 text-sm text-gray-500">Otázka nebyla spuštěna.</p>}
-            {q.image && (
-              <div className="mt-3">
-                <QuestionImage image={q.image} maxHeightClass="max-h-56" />
-              </div>
-            )}
-            <div className="mt-4">
-              <ResultsBarChart options={q.options} totalVotes={q.totalVotes} correctOptionId={q.status === "ended" ? q.correctOptionId : null} />
-            </div>
-            <p className="mt-2 text-sm text-gray-500">
-              Celkem: {q.totalVotes} {votesLabel(q.totalVotes)}
-            </p>
-            {q.link && <QuestionLink link={q.link} className="mt-3" />}
-          </section>
-        ))}
-      </div>
-
-      <div className="mt-12">
-        <AlphegaAffiliateBanner variant="standard" />
-      </div>
-    </main>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 text-center shadow-soft">
-      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</dt>
-      <dd className="mt-1 text-2xl font-bold text-gray-900">{value}</dd>
-    </div>
   );
 }
 

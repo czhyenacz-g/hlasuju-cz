@@ -36,6 +36,7 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
             publicCode,
             moderatorToken,
             email: input.email ?? null,
+            requireParticipantName: input.requireParticipantName ?? false,
             status: "active",
             expiresAt,
           })

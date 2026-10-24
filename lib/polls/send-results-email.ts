@@ -5,6 +5,7 @@ import { polls } from "../../db/schema.ts";
 import { isEmailConfigured, sendEmail } from "../email/send-email.ts";
 import { buildResultsEmail } from "../email/send-results-email.ts";
 import { getModeratorPoll } from "./get-moderator-poll.ts";
+import { getPollResponses } from "./get-question-responses.ts";
 
 /** Kolikrát a jak často smí moderátor poslat výsledky (vždy jen na svou uloženou adresu). */
 export const RESULTS_EMAIL_MAX_SENDS = 3;
@@ -43,6 +44,7 @@ export async function sendResultsEmail(moderatorToken: string, now: Date = new D
       title: polls.title,
       publicCode: polls.publicCode,
       createdAt: polls.createdAt,
+      requireParticipantName: polls.requireParticipantName,
       sentAt: polls.resultsEmailSentAt,
       count: polls.resultsEmailCount,
     })
@@ -89,6 +91,8 @@ export async function sendResultsEmail(moderatorToken: string, now: Date = new D
         createdAt: poll.createdAt,
         uniqueParticipants: view.uniqueParticipants,
         questions: view.questions.filter((question) => question.status !== "prepared"),
+        // Jména jen u jmenovitého hlasování a jen na adresu moderátora.
+        responses: poll.requireParticipantName ? await getPollResponses(poll.id) : undefined,
       }),
     }));
 

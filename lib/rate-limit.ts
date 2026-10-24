@@ -22,6 +22,9 @@ export const RATE_LIMITS = {
   uploadPerPoll: { limit: 60, windowSeconds: 60 * 60 },
   uploadPerIpDaily: { limit: 200, windowSeconds: 24 * 60 * 60 },
   contentSavePerPoll: { limit: 120, windowSeconds: 60 * 60 },
+  // Zadání jména (jmenovité hlasování): celá aula za NATem + opakování.
+  registerPerIpAndPoll: { limit: 300, windowSeconds: 60 },
+  registerPerParticipant: { limit: 10, windowSeconds: 60 },
 } as const;
 
 /** IP ani participantId neukládáme v čitelné podobě, jen zkrácený hash. */

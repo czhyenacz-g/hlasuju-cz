@@ -87,14 +87,12 @@ describe("zapojení banneru napříč stránkami", () => {
 
   test("moderátorská konzole (aktivní řízení) používá 'compact'", () => {
     const source = readSource("../app/m/[moderatorToken]/ModeratorConsole.tsx");
-    const consoleBody = source.slice(0, source.indexOf("function ModeratorFinalSummary"));
-    assert.match(consoleBody, /<AlphegaAffiliateBanner variant="compact" \/>/);
+    assert.match(source, /<AlphegaAffiliateBanner variant="compact" \/>/);
   });
 
   test("finální výsledky moderátora (ModeratorFinalSummary) používají 'standard'", () => {
-    const source = readSource("../app/m/[moderatorToken]/ModeratorConsole.tsx");
-    const summaryBody = source.slice(source.indexOf("function ModeratorFinalSummary"));
-    assert.match(summaryBody, /<AlphegaAffiliateBanner variant="standard" \/>/);
+    const source = readSource("../app/m/[moderatorToken]/ModeratorFinalSummary.tsx");
+    assert.match(source, /<AlphegaAffiliateBanner variant="standard" \/>/);
   });
 
   test("finální výsledky účastníka (FinalResultsSection) používají 'standard'", () => {

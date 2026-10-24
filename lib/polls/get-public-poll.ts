@@ -24,6 +24,7 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
       title: polls.title,
       status: polls.status,
       activeQuestionId: polls.activeQuestionId,
+      requireParticipantName: polls.requireParticipantName,
     })
     .from(polls)
     .where(and(eq(polls.publicCode, publicCode), gt(polls.expiresAt, new Date())))
@@ -82,6 +83,7 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
   return {
     title: poll.title,
     pollStatus: poll.status as PublicPollView["pollStatus"],
+    requireParticipantName: poll.requireParticipantName,
     activeQuestion,
     closedQuestion,
   };

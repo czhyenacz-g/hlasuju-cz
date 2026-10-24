@@ -1,11 +1,11 @@
 import "server-only";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
-import { options, polls, questions, votes } from "../../db/schema.ts";
+import { options, participants, polls, questions, votes } from "../../db/schema.ts";
 
 export type CastVoteResult =
   | { ok: true }
-  | { ok: false; reason: "poll_not_found" | "poll_closed" | "question_not_active" | "option_not_found" | "invalid_participant" };
+  | { ok: false; reason: "poll_not_found" | "poll_closed" | "question_not_active" | "option_not_found" | "invalid_participant" | "name_required" };
 
 const MAX_PARTICIPANT_ID_LENGTH = 64;
 
@@ -37,7 +37,12 @@ export async function castVote(
   const db = getDb();
 
   const [poll] = await db
-    .select({ id: polls.id, status: polls.status, activeQuestionId: polls.activeQuestionId })
+    .select({
+      id: polls.id,
+      status: polls.status,
+      activeQuestionId: polls.activeQuestionId,
+      requireParticipantName: polls.requireParticipantName,
+    })
     .from(polls)
     .where(and(eq(polls.publicCode, publicCode), gt(polls.expiresAt, new Date())))
     .limit(1);
@@ -54,6 +59,16 @@ export async function castVote(
     .limit(1);
 
   if (!option) return { ok: false, reason: "option_not_found" };
+
+  // Jmenovité hlasování: hlas jen od účastníka, který už zadal jméno.
+  if (poll.requireParticipantName) {
+    const [registered] = await db
+      .select({ id: participants.id })
+      .from(participants)
+      .where(and(eq(participants.pollId, poll.id), eq(participants.participantId, participantId)))
+      .limit(1);
+    if (!registered) return { ok: false, reason: "name_required" };
+  }
   if (option.questionStatus !== "active") return { ok: false, reason: "question_not_active" };
 
   try {

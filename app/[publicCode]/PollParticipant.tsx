@@ -7,7 +7,31 @@ import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx"
 import QuestionImage from "../../components/QuestionImage.tsx";
 import QuestionLink from "../../components/QuestionLink.tsx";
 import ResultsBarChart from "../../components/ResultsBarChart.tsx";
+import { LIMITS } from "../../lib/polls/limits.ts";
 import type { FinalResultsView, PublicPollView } from "../../lib/polls/types.ts";
+
+// Jmenovité hlasování: jméno potvrzené serverem si pamatujeme pro dané
+// hlasování, aby se nezadávalo znovu (server ho stejně drží k participantId).
+function nameStorageKey(publicCode: string) {
+  return `hlasuju_name_${publicCode}`;
+}
+
+function readStoredName(publicCode: string): string | null {
+  try {
+    return window.localStorage.getItem(nameStorageKey(publicCode));
+  } catch {
+    return null;
+  }
+}
+
+function storeName(publicCode: string, name: string | null) {
+  try {
+    if (name) window.localStorage.setItem(nameStorageKey(publicCode), name);
+    else window.localStorage.removeItem(nameStorageKey(publicCode));
+  } catch {
+    // Bez localStorage se jméno jen zeptá znovu — server vrátí to uložené.
+  }
+}
 
 // Klientská hlídka "hlasoval(a) jsem už u téhle otázky" — resetuje se
 // pokaždé, když moderátor aktivuje jinou otázku (viz activeQuestionId
@@ -18,10 +42,12 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   const [voted, setVoted] = useState<{ questionId: number; optionId: number; optionText: string } | null>(null);
   const [voting, setVoting] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
+  const [participantName, setParticipantName] = useState<string | null>(null);
 
   useEffect(() => {
     setParticipantId(getOrCreateParticipantId());
-  }, []);
+    setParticipantName(readStoredName(publicCode));
+  }, [publicCode]);
 
   const fetcher = useCallback(
     async (signal: AbortSignal) => {
@@ -57,6 +83,11 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
         body: JSON.stringify({ questionId: activeQuestion.id, optionId, participantId }),
       });
       const body = await response.json();
+      if (response.status === 403) {
+        // Server jméno nezná (např. jiné zařízení / smazaná data) — zeptat se znovu.
+        storeName(publicCode, null);
+        setParticipantName(null);
+      }
       if (!response.ok) {
         setVoteError(body.error ?? "Hlas se nepodařilo zaznamenat.");
         setVoting(false);
@@ -88,6 +119,20 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
       return <StateScreen title="Hlasování skončilo" message="Načítám výsledky…" />;
     }
     return <FinalResultsSection publicCode={publicCode} participantId={participantId} />;
+  }
+
+  if (data && !data.notFound && data.poll.requireParticipantName && !participantName && participantId) {
+    return (
+      <NameForm
+        publicCode={publicCode}
+        participantId={participantId}
+        onRegistered={(name) => {
+          storeName(publicCode, name);
+          setParticipantName(name);
+          setVoteError(null);
+        }}
+      />
+    );
   }
 
   if (closedQuestion) {
@@ -200,6 +245,88 @@ function AnswerEvaluation({
         })}
       </ul>
     </>
+  );
+}
+
+// Jmenovité hlasování: jméno/přezdívka jednou za hlasování. Jasně
+// řekne, že moderátor uvidí jméno i odpovědi (zadání), a jak dlouho se drží.
+function NameForm({
+  publicCode,
+  participantId,
+  onRegistered,
+}: {
+  publicCode: string;
+  participantId: string;
+  onRegistered: (name: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) {
+      setError("Zadejte jméno nebo přezdívku.");
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/polls/public/${publicCode}/participant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId, name }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(body.error ?? "Jméno se nepodařilo uložit.");
+        return;
+      }
+      onRegistered(body.name);
+    } catch {
+      setError("Jméno se nepodařilo uložit. Zkontrolujte připojení.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-8">
+        <h1 className="text-2xl font-bold text-gray-900">Jak se jmenujete?</h1>
+        <p className="mt-3 rounded-xl bg-pastel-blue px-4 py-3 text-sm text-gray-800">
+          V tomto hlasování moderátor uvidí vaše jméno nebo přezdívku a jednotlivé odpovědi.
+        </p>
+        <label className="mt-5 flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-gray-700">Jméno nebo přezdívka</span>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={LIMITS.MAX_PARTICIPANT_NAME_LENGTH}
+            autoComplete="nickname"
+            autoFocus
+            className="rounded-2xl border-2 border-gray-200 bg-cream px-4 py-3 text-lg text-gray-900 focus:border-brand focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand/15"
+          />
+        </label>
+        {error && (
+          <p role="alert" className="mt-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={pending}
+          className="mt-4 min-h-[56px] w-full rounded-2xl bg-brand px-6 py-3 text-lg font-semibold text-white shadow-soft transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/30 disabled:opacity-60"
+        >
+          {pending ? "Ukládám…" : "Pokračovat"}
+        </button>
+        <p className="mt-4 text-xs text-gray-500">
+          Nemusíte uvádět skutečné jméno. Jméno vidí jen moderátor tohoto hlasování, ostatní účastníci ne. Smaže se nejpozději{" "}
+          {LIMITS.POLL_TTL_DAYS + 7} dní po vytvoření hlasování.
+        </p>
+      </form>
+    </main>
   );
 }
 

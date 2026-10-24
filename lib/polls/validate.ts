@@ -214,6 +214,21 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
  * jen klientské validaci (viz zadání "validuj vstupy server-side").
  * Čistá funkce bez DB, snadno testovatelná (viz test/validate-poll.test.ts).
  */
+/**
+ * Jméno/přezdívka účastníka jmenovitého hlasování: ořízne a sloučí
+ * mezery, 1–40 znaků, bez řídicích a neviditelných znaků, aspoň jedno
+ * písmeno nebo číslice. `null` = neplatné. (HTML escapuje React, CSV
+ * injection řeší export.)
+ */
+export function normalizeParticipantName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const name = raw.normalize("NFC").replace(/\s+/g, " ").trim();
+  if (name.length < 1 || name.length > LIMITS.MAX_PARTICIPANT_NAME_LENGTH) return null;
+  if (/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(name)) return null;
+  if (!/[\p{L}\p{N}]/u.test(name)) return null;
+  return name;
+}
+
 export function validateCreatePollInput(input: unknown): ValidationResult {
   if (typeof input !== "object" || input === null) {
     return { ok: false, error: "Neplatný požadavek." };
@@ -243,6 +258,7 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
     value: {
       title: title.value,
       email,
+      requireParticipantName: body.requireParticipantName === true,
       questions: questions.value.map((q) => ({
         text: q.text,
         options: q.options.map((o) => ({ text: o.text })),

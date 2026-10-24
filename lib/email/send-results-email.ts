@@ -21,7 +21,11 @@ export type ResultsEmailInput = {
   createdAt: Date;
   uniqueParticipants: number;
   questions: ResultsEmailQuestion[];
+  /** Jen jmenovité hlasování: individuální odpovědi → druhá CSV příloha. */
+  responses?: ResponsesCsvRow[];
 };
+
+export type ResponsesCsvRow = { questionPosition: number; questionText: string; label: string; optionText: string; correct: boolean | null };
 
 /** Celá procenta; součet nemusí dát přesně 100 (zaokrouhlení), stejně jako na webu. */
 export function percent(votes: number, total: number): number {
@@ -39,6 +43,25 @@ function csvCell(value: string | number): string {
   return /[";\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
+function toCsv(rows: (string | number)[][]): string {
+  // BOM, aby Excel poznal UTF-8 (diakritika).
+  return "\uFEFF" + rows.map((row) => row.map(csvCell).join(";")).join("\r\n") + "\r\n";
+}
+
+/** Individuální odpovědi (jen moderátor jmenovitého hlasování). Číslo otázky = pořadí mezi spuštěnými. */
+export function buildResponsesCsv(responses: ResponsesCsvRow[]): string {
+  const numbers = new Map([...new Set(responses.map((row) => row.questionPosition))].sort((a, b) => a - b).map((position, index) => [position, index + 1]));
+  return toCsv([
+    ["Otázka", "Účastník", "Odpověď", "Výsledek"],
+    ...responses.map((row) => [
+      `${numbers.get(row.questionPosition)}. ${row.questionText}`,
+      row.label,
+      row.optionText,
+      row.correct === null ? "" : row.correct ? "správně" : "nesprávně",
+    ]),
+  ]);
+}
+
 export function buildResultsCsv(input: ResultsEmailInput): string {
   const rows: (string | number)[][] = [["Otázka", "Odpověď", "Hlasy", "Procenta", "Správná"]];
   input.questions.forEach((question, index) => {
@@ -52,8 +75,7 @@ export function buildResultsCsv(input: ResultsEmailInput): string {
       ]);
     }
   });
-  // BOM, aby Excel poznal UTF-8 (diakritika).
-  return "﻿" + rows.map((row) => row.map(csvCell).join(";")).join("\r\n") + "\r\n";
+  return toCsv(rows);
 }
 
 function votesWord(count: number) {
@@ -94,7 +116,7 @@ export function buildResultsEmail(input: ResultsEmailInput) {
 <p style="margin:0 0 20px;font-size:15px;color:${MUTED}">${escapeHtml(date)} · kód ${escapeHtml(input.publicCode)} · účastníků: <strong style="color:inherit">${input.uniqueParticipants}</strong></p>
 ${questionsHtml || `<p style="font-size:15px">Žádná otázka nebyla spuštěna.</p>`}
 <p style="margin:8px 0 6px">${button(resultsUrl, "Zobrazit výsledky na webu")}</p>
-<p style="margin:0;font-size:13px;color:${MUTED}">Výsledky jsou na webu dostupné ${LIMITS.POLL_TTL_DAYS} dní od vytvoření hlasování. V příloze je tabulka (CSV) pro Excel.</p>`,
+<p style="margin:0;font-size:13px;color:${MUTED}">Výsledky jsou na webu dostupné ${LIMITS.POLL_TTL_DAYS} dní od vytvoření hlasování. ${input.responses ? "V příloze jsou tabulky (CSV) pro Excel: souhrn a jmenovité odpovědi účastníků (osobní údaje – nepřeposílejte je dál)." : "V příloze je tabulka (CSV) pro Excel."}</p>`,
   });
 
   const text = [
@@ -119,6 +141,11 @@ ${questionsHtml || `<p style="font-size:15px">Žádná otázka nebyla spuštěna
     subject,
     html,
     text,
-    attachments: [{ filename: `vysledky-${input.publicCode}.csv`, content: buildResultsCsv(input), contentType: "text/csv; charset=utf-8" }],
+    attachments: [
+      { filename: `vysledky-${input.publicCode}.csv`, content: buildResultsCsv(input), contentType: "text/csv; charset=utf-8" },
+      ...(input.responses
+        ? [{ filename: `odpovedi-${input.publicCode}.csv`, content: buildResponsesCsv(input.responses), contentType: "text/csv; charset=utf-8" }]
+        : []),
+    ],
   };
 }

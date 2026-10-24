@@ -10,6 +10,7 @@ const REASON_STATUS: Record<string, number> = {
   question_not_active: 409,
   option_not_found: 400,
   invalid_participant: 400,
+  name_required: 403,
 };
 
 const REASON_MESSAGE: Record<string, string> = {
@@ -18,6 +19,7 @@ const REASON_MESSAGE: Record<string, string> = {
   question_not_active: "Tahle otázka už není aktivní.",
   option_not_found: "Neplatná odpověď.",
   invalid_participant: "Neplatný požadavek.",
+  name_required: "Nejdřív zadejte své jméno nebo přezdívku.",
 };
 
 export async function POST(request: Request, { params }: { params: Promise<{ publicCode: string }> }) {
