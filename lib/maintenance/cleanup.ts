@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { participants, pollImages, polls, questions, rateLimits } from "../../db/schema.ts";
 import { deletePollImageRows } from "../images/poll-images.ts";
@@ -46,7 +46,10 @@ export async function runCleanup(now: Date = new Date()): Promise<CleanupSummary
   const deletedNames = await db
     .delete(participants)
     .where(
-      sql`${participants.pollId} in (select ${polls.id} from ${polls} where ${polls.expiresAt} < ${new Date(now.getTime() - EXPIRED_GRACE_MS)})`
+      inArray(
+        participants.pollId,
+        db.select({ id: polls.id }).from(polls).where(lt(polls.expiresAt, new Date(now.getTime() - EXPIRED_GRACE_MS)))
+      )
     )
     .returning({ id: participants.id });
   const base = { rateLimitRowsDeleted: deletedRateLimits.length, participantNamesDeleted: deletedNames.length };

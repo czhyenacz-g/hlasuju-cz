@@ -10,5 +10,6 @@ import { LIMITS } from "./limits.ts";
  */
 export function extendedExpiresAt(now: Date = new Date()) {
   const minimum = new Date(now.getTime() + LIMITS.POLL_TTL_DAYS * 24 * 60 * 60 * 1000);
-  return sql`greatest(${polls.expiresAt}, ${minimum})`;
+  // ISO řetězec + cast: postgres-js neumí v sql`` šabloně serializovat Date.
+  return sql`greatest(${polls.expiresAt}, ${minimum.toISOString()}::timestamptz)`;
 }
