@@ -76,12 +76,12 @@ export function QuestionStatusBadge({
   }
   if (question.status === "ended") {
     return (
-      <span className={`${base} bg-gray-100 text-gray-700`}>
+      <span className={`${base} bg-pastel-blue text-gray-700`}>
         {isCurrent ? "Vyhodnocení" : "Ukončeno"}
         {compact ? "" : ` · ${question.totalVotes} hlasů`}
       </span>
     );
   }
-  return <span className={`${base} bg-brand/10 text-brand`}>Připraveno</span>;
+  return <span className={`${base} bg-brand-light text-brand-dark`}>Připraveno</span>;
 }
 

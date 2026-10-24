@@ -76,6 +76,8 @@ export type ModeratorPollView = {
   questions: ModeratorQuestionView[];
   totalVotes: number;
   uniqueParticipants: number;
+  /** Odeslání výsledků e-mailem (jen po ukončení, jen na adresu z vytvoření). */
+  resultsEmail: { to: string | null; configured: boolean; lastSentAt: string | null; remaining: number };
 };
 
 /** Obsah pro editor (/m/<token>/upravit). `locked` = otázka už byla spuštěná nebo má hlasy. */

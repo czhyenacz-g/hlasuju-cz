@@ -9,6 +9,7 @@ import QuestionLink from "../../../components/QuestionLink.tsx";
 import ResultsBarChart, { votesLabel } from "../../../components/ResultsBarChart.tsx";
 import AlphegaAffiliateBanner from "../../../components/AlphegaAffiliateBanner.tsx";
 import PresentationView from "./PresentationView.tsx";
+import ResultsEmailButton from "./ResultsEmailButton.tsx";
 import { PrimaryQuestionAction, QuestionStatusBadge, type ModeratorAction } from "./QuestionControls.tsx";
 import type { ModeratorPollView } from "../../../lib/polls/types.ts";
 
@@ -124,6 +125,8 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
     return (
       <ModeratorFinalSummary
         poll={poll}
+        moderatorToken={moderatorToken}
+        onEmailSent={refresh}
         onCopyLink={copyLink}
         copyLabel={copyLabel === "Kopírovat odkaz" ? "Kopírovat odkaz na výsledky" : copyLabel}
       />
@@ -168,9 +171,9 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         </div>
       </div>
 
-      <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-6 text-center shadow-sm">
+      <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-6 text-center shadow-soft">
         <p className="text-sm font-medium text-gray-500">Kód pro účastníky</p>
-        <p className="mt-1 text-5xl font-bold tracking-widest text-brand">{poll.publicCode}</p>
+        <p className="mx-auto mt-2 inline-block rounded-2xl bg-brand-light px-6 py-2 text-5xl font-bold tracking-widest text-brand-dark">{poll.publicCode}</p>
         <p className="mt-2 text-gray-500">hlasuju.cz/{poll.publicCode}</p>
 
         <div className="mt-5 flex flex-wrap justify-center gap-3">
@@ -198,7 +201,11 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
       </section>
 
       {question && (
-        <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section
+          className={`mt-6 rounded-3xl border bg-white p-6 shadow-soft ${
+            question.status === "active" ? "border-brand ring-4 ring-brand/15" : "border-gray-200"
+          }`}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium text-gray-500">
               Otázka {cursorIndex + 1} z {poll.questions.length}
@@ -216,7 +223,7 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
           <ul className="mt-4 flex flex-col gap-1.5 text-gray-800">
             {question.options.map((option, index) => (
               <li key={option.id} className="flex items-baseline gap-3">
-                <span className="w-5 font-bold text-brand">{LETTERS[index]}</span>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-md bg-brand-light text-sm font-bold text-brand-dark">{LETTERS[index]}</span>
                 <span className="flex-1">{option.text}</span>
                 {question.status !== "prepared" && <span className="text-sm text-gray-500">{option.votes}</span>}
               </li>
@@ -263,7 +270,7 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         </section>
       )}
 
-      <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+      <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-soft sm:p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Všechny otázky</h2>
         <ol className="mt-3 flex flex-col gap-1">
           {poll.questions.map((q, index) => (
@@ -272,7 +279,7 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
                 type="button"
                 onClick={() => setCursorId(q.id)}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${
-                  q.id === question?.id ? "bg-brand/10 text-gray-900" : "text-gray-700 hover:bg-gray-50"
+                  q.id === question?.id ? "bg-brand-light text-gray-900" : "text-gray-700 hover:bg-gray-100"
                 }`}
               >
                 <span className="w-6 shrink-0 text-gray-400">{index + 1}.</span>
@@ -305,10 +312,14 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
 // "Zobrazit výsledky" pro dílčí náhled tu už nedává smysl.
 function ModeratorFinalSummary({
   poll,
+  moderatorToken,
+  onEmailSent,
   onCopyLink,
   copyLabel,
 }: {
   poll: ModeratorPollView;
+  moderatorToken: string;
+  onEmailSent: () => void;
   onCopyLink: () => void;
   copyLabel: string;
 }) {
@@ -335,9 +346,16 @@ function ModeratorFinalSummary({
         {copyLabel}
       </button>
 
-      <div className="mt-10 flex flex-col gap-10">
+      <section className="mt-6 rounded-3xl border border-gray-200 bg-pastel-blue/60 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Výsledky e-mailem</h2>
+        <div className="mt-3">
+          <ResultsEmailButton moderatorToken={moderatorToken} resultsEmail={poll.resultsEmail} onSent={onEmailSent} />
+        </div>
+      </section>
+
+      <div className="mt-8 flex flex-col gap-5">
         {poll.questions.map((q, index) => (
-          <section key={q.id}>
+          <section key={q.id} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-soft">
             <h2 className="text-xl font-bold text-gray-900">
               {index + 1}. {q.text}
             </h2>
@@ -367,7 +385,7 @@ function ModeratorFinalSummary({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 text-center">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 text-center shadow-soft">
       <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</dt>
       <dd className="mt-1 text-2xl font-bold text-gray-900">{value}</dd>
     </div>

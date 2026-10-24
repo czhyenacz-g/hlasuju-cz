@@ -36,14 +36,14 @@ export async function POST(request: NextRequest) {
   // zdržet ani shodit odpověď na vytvoření hlasování.
   const email = validated.value.email;
   if (email) {
-    runAfterResponse(() =>
-      sendPollCreatedEmail({
+    runAfterResponse(async () => {
+      await sendPollCreatedEmail({
         to: email,
         title: validated.value.title ?? null,
         publicCode,
         moderatorToken,
-      })
-    );
+      });
+    });
   }
 
   return NextResponse.json({ publicCode, moderatorToken, questionIds }, { status: 201 });

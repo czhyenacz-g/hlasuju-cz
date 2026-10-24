@@ -85,17 +85,28 @@ Schéma je ve `db/schema.ts` (5 tabulek: `polls`, `questions`, `options`,
 `votes`, `rate_limits`). Novou migraci po změně schématu vygeneruješ přes
 `npm run db:generate`, aplikuješ přes `npm run db:migrate`.
 
-## Resend (e-mail s odkazem na hlasování)
+## Resend (e-maily)
 
-Volitelné. Po vytvoření hlasování se, pokud moderátor zadal e-mail,
-pošle zpráva s kódem a oběma odkazy přes [Resend](https://resend.com).
+Volitelné. Dva e-maily, oba jen na adresu, kterou moderátor zadal při
+vytvoření (`lib/email/`):
 
-1. Založ účet na resend.com, vygeneruj API klíč.
-2. Nastav `RESEND_API_KEY` (a volitelně `RESEND_FROM_EMAIL`, jinak se
-   použije sdílená testovací adresa `onboarding@resend.dev`).
+- **Po vytvoření hlasování** (automaticky, přes `after()`): kód, odkaz
+  pro účastníky, moderátorský odkaz a krátký návod.
+- **Výsledky** (tlačítko „Poslat výsledky e-mailem" po ukončení,
+  `POST /api/polls/moderator/<token>/results-email`): počty, procenta,
+  počet účastníků a CSV v příloze. Příjemce nejde zadat; max. 3×
+  na hlasování a nejdřív po 10 minutách (`lib/polls/send-results-email.ts`).
+
+1. Založ účet na resend.com, ověř odesílací doménu (DNS záznamy
+   SPF/DKIM pro `hlasuju.cz`) a vygeneruj API klíč (stačí „Sending access").
+2. Nastav `RESEND_API_KEY` a `RESEND_FROM_EMAIL`, např.
+   `Hlasuju.cz <hlasovani@hlasuju.cz>`. Bez ověřené domény funguje jen
+   testovací `onboarding@resend.dev`, která doručí **jen na e-mail
+   vlastníka Resend účtu** — skutečným moderátorům ne.
 
 Bez `RESEND_API_KEY` appka funguje úplně normálně — vytvoření hlasování
-nikdy nezávisí na tom, jestli se e-mail povedlo poslat.
+nikdy nezávisí na e-mailu a tlačítko výsledků ukáže, že odesílání není
+dostupné. Úspěch znamená jen, že Resend e-mail přijal, ne že dorazil.
 
 ## Obrázky (Universal Content API) — volitelné
 

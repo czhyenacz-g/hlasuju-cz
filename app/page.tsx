@@ -1,37 +1,68 @@
 import Link from "next/link";
 import AlphegaAffiliateBanner from "../components/AlphegaAffiliateBanner.tsx";
-import { SITE_TAGLINE } from "./config/site.ts";
+import VotingBackdrop from "../components/VotingBackdrop.tsx";
 import HomeJoinForm from "./HomeJoinForm.tsx";
+
+const BENEFITS = [
+  { title: "Bez registrace", icon: "M5 12.5l4 4 10-10" },
+  { title: "Funguje na mobilu", icon: "M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM11 18h2" },
+  { title: "Výsledky okamžitě", icon: "M5 20V11M12 20V5M19 20v-6" },
+];
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">hlasuju.cz</h1>
-        <p className="mt-3 text-lg text-gray-600">{SITE_TAGLINE}</p>
+    <main className="relative flex min-h-screen flex-col items-center px-4 py-8 sm:py-16">
+      <VotingBackdrop />
 
-        {/* Účastník je vizuálně dominantnější — většina lidí na
-            homepage přichází zadat kód, ne založit hlasování (viz zadání). */}
-        <section className="mt-10 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-brand">Jsem účastník</h2>
-          <div className="mt-4">
-            <HomeJoinForm />
-          </div>
-        </section>
+      <div className="w-full max-w-4xl">
+        <p className="text-center text-lg font-bold tracking-tight text-brand">hlasuju.cz</p>
 
-        <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-6 sm:p-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Jsem moderátor</h2>
-          <Link
-            href="/vytvorit"
-            className="mt-4 inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 border-gray-200 px-6 text-base font-semibold text-gray-800 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20"
-          >
-            Vytvořit hlasování
-          </Link>
-        </section>
+        <div className="mx-auto mt-5 max-w-3xl text-balance text-center sm:mt-10">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl">Hlasujte spolu. Výsledky hned.</h1>
+          <p className="mt-3 text-base text-gray-600 sm:mt-4 sm:text-lg">
+            Jednoduché živé hlasování pro přednášky, výuku a porady. Stačí mobil a kód.
+          </p>
+        </div>
 
-        <p className="mt-8 text-sm text-gray-500">Bez registrace. Zdarma. Hotovo za pár sekund.</p>
+        {/* Účastník je první a výraznější — většina lidí na homepage
+            přichází zadat kód; na mobilu musí být pole hned vidět. */}
+        <div className="mt-6 grid gap-4 sm:mt-12 sm:gap-6 md:grid-cols-5">
+          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-8 md:col-span-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand">Jsem účastník</h2>
+            <p className="mt-1 text-sm text-gray-600">Zadejte šestimístný kód, který vidíte na plátně.</p>
+            <div className="mt-4">
+              <HomeJoinForm />
+            </div>
+          </section>
 
-        <div className="mt-10">
+          <section className="flex flex-col rounded-3xl border border-gray-200 bg-white/80 p-6 sm:p-8 md:col-span-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Jsem moderátor</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Připravte otázky, ukažte kód nebo QR a sledujte, jak přibývají hlasy.
+            </p>
+            <Link
+              href="/vytvorit"
+              className="mt-5 inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 border-brand/30 bg-brand-light/60 px-6 text-base font-semibold text-brand-dark transition hover:border-brand hover:bg-brand-light focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 md:mt-auto"
+            >
+              Vytvořit hlasování
+            </Link>
+          </section>
+        </div>
+
+        <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-gray-600 sm:mt-10">
+          {BENEFITS.map((benefit) => (
+            <li key={benefit.title} className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-pastel-green text-gray-700">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d={benefit.icon} />
+                </svg>
+              </span>
+              {benefit.title}
+            </li>
+          ))}
+        </ul>
+
+        <div className="mx-auto mt-12 max-w-2xl sm:mt-16">
           <AlphegaAffiliateBanner variant="standard" />
         </div>
       </div>

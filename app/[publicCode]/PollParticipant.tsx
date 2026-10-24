@@ -116,7 +116,7 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
     return (
       <StateScreen title="✓ Hlas byl zaznamenán" message="Čekáme na další otázku…" showAd>
         {voted.optionText && (
-          <p className="mt-4 rounded-xl bg-brand/5 px-4 py-3 text-gray-800">
+          <p className="mt-4 rounded-xl bg-pastel-green px-4 py-3 text-gray-800">
             Vaše odpověď: <span className="font-semibold">{voted.optionText}</span>
           </p>
         )}
@@ -141,7 +141,7 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
               type="button"
               onClick={() => castVote(option.id, option.text)}
               disabled={voting || !participantId}
-              className="min-h-[64px] w-full rounded-2xl border-2 border-gray-200 bg-white px-6 py-4 text-lg font-semibold text-gray-900 transition hover:border-brand hover:text-brand disabled:opacity-60"
+              className="min-h-[64px] w-full rounded-2xl border-2 border-gray-200 bg-white px-6 py-4 text-lg font-semibold text-gray-900 shadow-soft transition hover:border-brand hover:bg-brand-light/40 hover:text-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 active:scale-[0.99] disabled:opacity-60"
             >
               {option.text}
             </button>
@@ -170,9 +170,11 @@ function StateScreen({
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10 text-center">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-        <p className="mt-3 text-gray-600">{message}</p>
-        {children}
+        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-8">
+          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+          <p className="mt-3 text-gray-600">{message}</p>
+          {children}
+        </div>
         {showAd && (
           <div className="mt-10">
             <AlphegaAffiliateBanner variant="compact" />
@@ -221,9 +223,9 @@ function FinalResultsSection({ publicCode, participantId }: { publicCode: string
       <h1 className="text-center text-3xl font-bold text-gray-900">Hlasování skončilo</h1>
       {data.title && <p className="mt-2 text-center text-lg text-gray-600">{data.title}</p>}
 
-      <div className="mt-10 flex flex-col gap-10">
+      <div className="mt-8 flex flex-col gap-5">
         {data.questions.map((q, index) => (
-          <section key={q.id}>
+          <section key={q.id} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-soft">
             <h2 className="text-xl font-bold text-gray-900">
               {index + 1}. {q.text}
             </h2>

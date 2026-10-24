@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="cs">
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+      <body className="min-h-screen bg-cream text-gray-900 antialiased">
         {children}
         <SiteAnalytics />
         {GOATCOUNTER_CODE && (

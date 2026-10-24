@@ -34,12 +34,12 @@ export default function HomeJoinForm() {
         }}
         placeholder="Zadejte kód hlasování"
         aria-label="Kód hlasování"
-        className="w-full rounded-2xl border-2 border-gray-200 px-6 py-5 text-center text-3xl font-semibold tracking-widest text-gray-900 placeholder:text-base placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-400 focus:border-brand focus:outline-none"
+        className="w-full rounded-2xl border-2 border-gray-200 bg-cream px-6 py-5 text-center text-3xl font-semibold tracking-widest text-gray-900 placeholder:text-base placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-400 focus:border-brand focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand/15"
       />
       {error && <p className="text-center text-sm text-red-600">{error}</p>}
       <button
         type="submit"
-        className="min-h-[56px] w-full rounded-2xl bg-brand px-6 py-4 text-lg font-semibold text-white transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/30"
+        className="min-h-[56px] w-full rounded-2xl bg-brand px-6 py-4 text-lg font-semibold text-white shadow-soft transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/30"
       >
         Připojit se
       </button>

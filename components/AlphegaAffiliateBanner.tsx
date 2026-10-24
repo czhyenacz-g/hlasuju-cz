@@ -30,7 +30,7 @@ export default function AlphegaAffiliateBanner({ variant = "standard", className
         href={ad.href}
         target="_blank"
         rel="sponsored noopener noreferrer"
-        className={`block rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm transition hover:border-brand/40 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 ${className}`}
+        className={`block rounded-xl border border-gray-200 bg-white/60 px-4 py-3 text-sm transition hover:border-brand/40 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 ${className}`}
       >
         <p className="text-gray-600">{ad.headline}</p>
         <p className="mt-0.5 font-semibold text-brand">{ad.compactCta}</p>
@@ -39,23 +39,23 @@ export default function AlphegaAffiliateBanner({ variant = "standard", className
     );
   }
 
+  // Záměrně tlumená: bez výrazného CTA tlačítka, menší písmo — nesmí
+  // soupeřit s hlavními akcemi stránky (připojit se / vytvořit).
   return (
     <a
       href={ad.href}
       target="_blank"
       rel="sponsored noopener noreferrer"
-      className={`block rounded-2xl border border-gray-200 bg-gray-50 px-5 py-5 transition hover:border-brand/40 hover:bg-gray-100/70 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 sm:px-6 sm:py-6 ${className}`}
+      className={`block rounded-2xl border border-gray-200 bg-white/60 px-5 py-4 transition hover:border-brand/30 hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 ${className}`}
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div>
-          <p className="text-base font-semibold text-gray-900">{ad.headline}</p>
-          <p className="mt-1 text-sm text-gray-600">{ad.subtext}</p>
+          <p className="text-sm font-semibold text-gray-800">{ad.headline}</p>
+          <p className="mt-0.5 text-sm text-gray-600">{ad.subtext}</p>
         </div>
-        <span className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-xl border-2 border-brand px-5 text-sm font-semibold text-brand">
-          {ad.cta}
-        </span>
+        <span className="inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold text-brand">{ad.cta}</span>
       </div>
-      <p className="mt-3 text-[10px] uppercase tracking-wide text-gray-400">{ad.badge}</p>
+      <p className="mt-2 text-[10px] uppercase tracking-wide text-gray-400">{ad.badge}</p>
     </a>
   );
 }

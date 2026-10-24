@@ -36,6 +36,10 @@ export const polls = pgTable(
     // — každé uložení ho zvýší, uložení se starší verzí se odmítne, takže
     // dvě otevřená okna editoru si tiše nepřepíšou změny.
     version: integer("version").notNull().default(1),
+    // E-mail s výsledky (lib/polls/send-results-email.ts): kdy naposledy a
+    // kolikrát — brání opakovanému odesílání na adresu moderátora.
+    resultsEmailSentAt: timestamp("results_email_sent_at", { withTimezone: true }),
+    resultsEmailCount: integer("results_email_count").notNull().default(0),
   },
   (table) => [
     uniqueIndex("polls_public_code_unique").on(table.publicCode),

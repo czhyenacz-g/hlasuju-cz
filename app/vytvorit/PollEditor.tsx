@@ -413,7 +413,7 @@ export default function PollEditor(props: PollEditorProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <div className={`grid gap-4 ${isEdit ? "" : "sm:grid-cols-2"}`}>
+      <div className={`grid gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-soft sm:p-6 ${isEdit ? "" : "sm:grid-cols-2"}`}>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-gray-700">Název hlasování (nepovinné)</span>
           <input
@@ -425,7 +425,7 @@ export default function PollEditor(props: PollEditorProps) {
             }}
             maxLength={LIMITS.MAX_TITLE_LENGTH}
             placeholder="např. První pomoc – 3. přednáška"
-            className="rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-brand focus:outline-none"
+            className="rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
           />
         </label>
         {!isEdit && (
@@ -437,7 +437,7 @@ export default function PollEditor(props: PollEditorProps) {
               onChange={(e) => setEmail(e.target.value)}
               maxLength={LIMITS.MAX_EMAIL_LENGTH}
               placeholder="vas@email.cz"
-              className="rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-brand focus:outline-none"
+              className="rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
             />
           </label>
         )}
@@ -455,7 +455,7 @@ export default function PollEditor(props: PollEditorProps) {
       </div>
 
       {!props.imagesEnabled && (
-        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Nahrávání obrázků zatím není na serveru zapnuté. Otázky bez obrázků fungují normálně.
         </p>
       )}
@@ -486,13 +486,13 @@ export default function PollEditor(props: PollEditorProps) {
         type="button"
         onClick={addQuestion}
         disabled={questions.length >= LIMITS.MAX_QUESTIONS || saving}
-        className="self-start rounded-xl border-2 border-dashed border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-600 transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-3xl border-2 border-dashed border-brand/30 bg-white/60 px-5 py-4 text-sm font-semibold text-brand transition hover:border-brand hover:bg-brand-light/50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         + Přidat otázku
       </button>
 
       {/* Ukládací lišta je pořád na očích i u dlouhého seznamu otázek. */}
-      <div className="sticky bottom-0 z-10 -mx-4 border-t border-gray-200 bg-gray-50 px-4 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.04)] sm:mx-0 sm:rounded-2xl sm:border">
+      <div className="sticky bottom-0 z-10 -mx-4 border-t border-gray-200 bg-white/95 px-4 py-4 shadow-[0_-8px_24px_-12px_rgba(76,64,150,0.25)] backdrop-blur sm:bottom-3 sm:mx-0 sm:rounded-2xl sm:border">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <StatusMessage status={status} dirty={dirty} isEdit={isEdit} />
           <div className="flex shrink-0 flex-wrap items-center gap-3">
@@ -516,7 +516,7 @@ export default function PollEditor(props: PollEditorProps) {
             <button
               type="submit"
               disabled={saving || (isEdit && !dirty)}
-              className="min-h-[52px] rounded-2xl bg-brand px-6 py-3 text-base font-semibold text-white transition hover:bg-brand-dark disabled:opacity-60"
+              className="min-h-[52px] rounded-2xl bg-brand px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/30 disabled:opacity-60"
             >
               {saving ? "Ukládám…" : isEdit ? "Uložit změny" : "Vytvořit hlasování"}
             </button>
@@ -592,8 +592,8 @@ function QuestionCard({
   const actionClass = "rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30";
 
   return (
-    <li className={`rounded-3xl border bg-white shadow-sm ${question.locked ? "border-gray-200 bg-gray-50" : "border-gray-200"}`}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100 px-4 py-3 sm:px-5">
+    <li className={`rounded-3xl border shadow-soft ${question.locked ? "border-gray-200 bg-gray-50" : "border-gray-200 bg-white"}`}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-t-3xl border-b border-gray-100 bg-brand-light/40 px-4 py-3 sm:px-5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-bold text-white">{index + 1}</span>
         <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left" aria-expanded={question.expanded}>
           <span className="block truncate font-semibold text-gray-900">{question.text.trim() || "Nová otázka"}</span>
@@ -604,7 +604,7 @@ function QuestionCard({
           </span>
         </button>
         {question.locked && (
-          <span className="rounded-full bg-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-700" title="Otázka už byla spuštěná — změnit jde jen její pořadí.">
+          <span className="rounded-full bg-pastel-blue px-2.5 py-1 text-xs font-semibold text-gray-700" title="Otázka už byla spuštěná — změnit jde jen její pořadí.">
             🔒 Spuštěno – nelze upravit
           </span>
         )}
@@ -643,7 +643,7 @@ function QuestionCard({
                   maxLength={LIMITS.MAX_QUESTION_LENGTH}
                   rows={2}
                   placeholder="např. O jaký typ zranění se jedná?"
-                  className="resize-y rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none"
+                  className="resize-y rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
                 />
               </label>
 
@@ -661,7 +661,7 @@ function QuestionCard({
                 <span className="text-sm font-medium text-gray-700">Odpovědi</span>
                 {question.options.map((option, optionIndex) => (
                   <div key={option.key} className="flex items-center gap-2">
-                    <span className="w-6 shrink-0 text-center text-sm font-bold text-gray-400">{LETTERS[optionIndex]}</span>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-light text-sm font-bold text-brand-dark">{LETTERS[optionIndex]}</span>
                     <input
                       type="text"
                       value={option.text}
@@ -670,7 +670,7 @@ function QuestionCard({
                       }
                       maxLength={LIMITS.MAX_OPTION_LENGTH}
                       placeholder="Text odpovědi"
-                      className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none"
+                      className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
                     />
                     <button
                       type="button"
@@ -687,7 +687,7 @@ function QuestionCard({
                   type="button"
                   onClick={() => onUpdateOptions((options) => (options.length < LIMITS.MAX_OPTIONS ? [...options, emptyOption()] : options))}
                   disabled={question.options.length >= LIMITS.MAX_OPTIONS}
-                  className="self-start pl-8 text-sm font-semibold text-brand hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  className="self-start pl-9 text-sm font-semibold text-brand hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   + Přidat odpověď
                 </button>
@@ -772,7 +772,7 @@ function ImageField({
     return (
       <div className="flex flex-col gap-3">
         <span className="text-sm font-medium text-gray-700">Obrázek</span>
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+        <div className="rounded-2xl border border-gray-200 bg-cream p-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- lokální náhled (blob:) nebo obrázek z Content API */}
           <img src={previewUrl} alt={question.imageAlt || "Náhled obrázku"} className="mx-auto max-h-72 w-auto rounded-xl object-contain" />
           {question.image.kind === "pending" && <p className="mt-2 text-center text-xs text-gray-500">Obrázek se nahraje při uložení.</p>}
@@ -799,7 +799,7 @@ function ImageField({
             onChange={(e) => onAltChange(e.target.value)}
             maxLength={LIMITS.MAX_IMAGE_ALT_LENGTH}
             placeholder="např. Fotografie poranění předloktí"
-            className="rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none"
+            className="rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
           />
         </label>
       </div>
@@ -821,7 +821,7 @@ function ImageField({
         onDrop={handleDrop}
         disabled={disabled || !imagesEnabled}
         className={`flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition disabled:cursor-not-allowed disabled:opacity-50 ${
-          dragging ? "border-brand bg-brand/5" : "border-gray-300 hover:border-brand hover:bg-brand/5"
+          dragging ? "border-brand bg-brand-light/60" : "border-brand/25 bg-cream hover:border-brand hover:bg-brand-light/40"
         }`}
       >
         <span className="font-semibold text-brand">+ Přidat obrázek</span>
@@ -843,7 +843,7 @@ function LinkField({ question, onChange }: { question: QuestionDraft; onChange: 
   const invalid = question.linkUrl.trim() !== "" && !normalizeLinkUrl(question.linkUrl);
 
   return (
-    <fieldset className="flex flex-col gap-3 rounded-2xl border border-gray-200 p-4">
+    <fieldset className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-cream/60 p-4">
       <legend className="px-1 text-sm font-medium text-gray-700">Odkaz – zdroj / další informace</legend>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5">
@@ -859,7 +859,7 @@ function LinkField({ question, onChange }: { question: QuestionDraft; onChange: 
             maxLength={LIMITS.MAX_LINK_URL_LENGTH}
             placeholder="https://…"
             aria-invalid={invalid}
-            className={`rounded-xl border-2 px-4 py-2.5 text-gray-900 focus:outline-none ${invalid ? "border-red-300 focus:border-red-500" : "border-gray-200 focus:border-brand"}`}
+            className={`rounded-xl border-2 px-4 py-2.5 text-gray-900 focus:outline-none ${invalid ? "border-red-300 focus:border-red-500" : "border-gray-200 focus:border-brand focus:ring-4 focus:ring-brand/10"}`}
           />
           {invalid && <span className="text-xs text-red-600">Zadejte platnou adresu začínající http:// nebo https://.</span>}
         </label>
@@ -871,7 +871,7 @@ function LinkField({ question, onChange }: { question: QuestionDraft; onChange: 
             onChange={(e) => onChange({ linkLabel: e.target.value })}
             maxLength={LIMITS.MAX_LINK_LABEL_LENGTH}
             placeholder="např. Zdroj fotografie"
-            className="rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none"
+            className="rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
           />
         </label>
       </div>

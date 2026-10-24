@@ -3,6 +3,8 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions, votes } from "../../db/schema.ts";
 import { questionMediaColumns, toQuestionImage, toQuestionLink } from "./question-media.ts";
+import { isEmailConfigured } from "../email/send-email.ts";
+import { maskEmail, RESULTS_EMAIL_MAX_SENDS } from "./send-results-email.ts";
 import type { ModeratorPollView, ModeratorQuestionView } from "./types.ts";
 
 /**
@@ -21,6 +23,9 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       publicCode: polls.publicCode,
       status: polls.status,
       activeQuestionId: polls.activeQuestionId,
+      email: polls.email,
+      resultsEmailSentAt: polls.resultsEmailSentAt,
+      resultsEmailCount: polls.resultsEmailCount,
     })
     .from(polls)
     .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
@@ -90,5 +95,13 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
     questions: questionViews,
     totalVotes: questionViews.reduce((sum, q) => sum + q.totalVotes, 0),
     uniqueParticipants,
+    // Jen maskovaná adresa — moderátorský odkaz se sdílí s kolegy a
+    // celou adresu z něj nikdo nemá vyčíst.
+    resultsEmail: {
+      to: poll.email ? maskEmail(poll.email) : null,
+      configured: isEmailConfigured(),
+      lastSentAt: poll.resultsEmailSentAt?.toISOString() ?? null,
+      remaining: Math.max(0, RESULTS_EMAIL_MAX_SENDS - poll.resultsEmailCount),
+    },
   };
 }

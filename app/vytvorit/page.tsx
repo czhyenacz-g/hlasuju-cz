@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import PollEditor from "./PollEditor.tsx";
 import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx";
+import VotingBackdrop from "../../components/VotingBackdrop.tsx";
 import { isImageStorageConfigured } from "../../lib/images/storage.ts";
 
 export const metadata: Metadata = {
@@ -9,8 +11,12 @@ export const metadata: Metadata = {
 
 export default function CreatePollPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-4 py-12">
-      <h1 className="text-3xl font-bold tracking-tight text-gray-900">Vytvořit hlasování</h1>
+    <main className="relative mx-auto min-h-screen max-w-3xl px-4 py-8 sm:py-12">
+      <VotingBackdrop />
+      <Link href="/" className="text-lg font-bold tracking-tight text-brand hover:text-brand-dark">
+        hlasuju.cz
+      </Link>
+      <h1 className="mt-6 text-3xl font-bold tracking-tight text-gray-900">Vytvořit hlasování</h1>
       <p className="mt-2 text-gray-600">
         Přidejte otázky, odpovědi a případně obrázek nebo odkaz. Po vytvoření dostanete kód pro účastníky a moderátorský odkaz — přes něj
         můžete otázky později i upravit.
