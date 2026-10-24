@@ -53,7 +53,7 @@ export default function ResultsBarChart({
         const barClass = evaluated ? (isCorrect ? "bg-emerald-600" : "bg-red-300") : highlightMode && !isSelected ? "bg-brand/50" : "bg-brand";
         return (
           <div key={option.id} className={wrapperClass}>
-            <div className="mb-1 flex items-baseline justify-between gap-3">
+            <div className={`mb-1 flex items-baseline justify-between ${large ? "flex-wrap gap-x-4 gap-y-1" : "gap-3"}`}>
               <span
                 className={`${large ? "text-2xl lg:text-3xl" : "text-lg sm:text-xl"} ${
                   isSelected && !evaluated ? "font-bold text-brand" : isCorrect ? "font-bold text-gray-900" : "font-medium text-gray-900"
@@ -69,7 +69,7 @@ export default function ResultsBarChart({
                 {evaluated && !isCorrect && <span className="sr-only"> (nesprávná odpověď)</span>}
                 {isCorrect && (
                   <span
-                    className={`ml-2 rounded-full bg-emerald-700 px-2 py-0.5 align-middle font-semibold text-white ${large ? "text-base lg:text-xl" : "text-xs"}`}
+                    className={`ml-2 inline-block whitespace-nowrap rounded-full bg-emerald-700 px-2 py-0.5 align-middle font-semibold text-white ${large ? "text-base 2xl:text-xl" : "text-xs"}`}
                   >
                     Správná odpověď
                   </span>

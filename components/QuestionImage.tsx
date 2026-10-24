@@ -10,17 +10,23 @@ import type { QuestionImage as QuestionImageData } from "../lib/polls/types.ts";
  *
  * `maxHeightClass` určuje, kolik výšky obrázek smí zabrat — na mobilu
  * účastníka málo (odpovědi musí zůstat na displeji), na projektoru hodně.
+ *
+ * `fitHeight` (jen promítání) = obrázek se zvětší, aby vyplnil šířku
+ * sloupce, ale nebyl vyšší než daná CSS výška — i malé obrázky se tak
+ * zvětší (poměr stran z uložených rozměrů, nic se neořízne ani nedeformuje).
  */
 export default function QuestionImage({
   image,
   maxHeightClass = "max-h-[40vh]",
   className = "",
   priority = false,
+  fitHeight,
 }: {
   image: QuestionImageData;
   maxHeightClass?: string;
   className?: string;
   priority?: boolean;
+  fitHeight?: string;
 }) {
   const [zoomed, setZoomed] = useState(false);
   // Výpadek úložiště obrázků nesmí rozbít hlasování — místo rozbitého
@@ -46,6 +52,7 @@ export default function QuestionImage({
         onClick={() => setZoomed(true)}
         className={`group relative mx-auto block max-w-full overflow-hidden rounded-2xl bg-gray-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/30 ${className}`}
         aria-label={`Zvětšit obrázek: ${alt}`}
+        style={fitHeight ? { width: `min(100%, calc(${fitHeight} * ${image.width / image.height}))` } : undefined}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- obrázky z Content API bez Next image optimalizace (náklady); velikost řeší zmenšení při uploadu */}
         <img
@@ -57,7 +64,7 @@ export default function QuestionImage({
           decoding="async"
           fetchPriority={priority ? "high" : "auto"}
           onError={() => setFailedUrl(image.url)}
-          className={`mx-auto block h-auto w-auto max-w-full object-contain ${maxHeightClass}`}
+          className={`mx-auto block h-auto max-w-full object-contain ${fitHeight ? "w-full" : `w-auto ${maxHeightClass}`}`}
         />
         <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white opacity-80 group-hover:opacity-100">
           Zvětšit

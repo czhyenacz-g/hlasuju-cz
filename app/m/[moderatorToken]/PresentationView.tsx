@@ -133,17 +133,29 @@ export default function PresentationView({
         </p>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5 lg:px-12 lg:py-6">
-        <h1 className="text-3xl font-bold leading-tight lg:text-5xl">{question.text}</h1>
+      <main className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5 ${question.image ? "lg:px-8 lg:py-4" : "lg:px-12 lg:py-6"}`}>
+        <h1 className={`text-3xl font-bold leading-tight ${question.image ? "lg:text-4xl xl:text-5xl" : "lg:text-5xl"}`}>{question.text}</h1>
 
         <div
-          className={`mt-5 flex-1 lg:mt-6 ${
-            question.image ? "grid items-center gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-12" : "flex flex-col justify-center"
+          className={`mt-5 flex-1 ${
+            question.image
+              ? // S obrázkem: obrázek ~65 % šířky, odpovědi ~35 % (s výsledky
+                // ~60/40 — pruhy a procenta potřebují víc místa). Výška obrázku
+                // = zbytek obrazovky po hlavičce, nadpisu a patičce (max. 70vh).
+                `grid items-center gap-6 lg:mt-4 lg:gap-8 ${
+                  showResults ? "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)]"
+                }`
+              : "flex flex-col justify-center lg:mt-6"
           }`}
         >
-          {question.image && <QuestionImage image={question.image} maxHeightClass="max-h-[55vh]" priority />}
+          {question.image && (
+            <>
+              <QuestionImage image={question.image} maxHeightClass="max-h-[55vh]" className="lg:hidden" priority />
+              <QuestionImage image={question.image} fitHeight="min(70vh, 100vh - 16rem)" className="hidden lg:block" priority />
+            </>
+          )}
 
-          <div className="flex flex-col gap-6">
+          <div className="flex min-w-0 flex-col gap-6">
             {showResults ? (
               <ResultsBarChart
                 options={question.options}
@@ -160,7 +172,7 @@ export default function PresentationView({
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-xl font-bold text-white lg:h-12 lg:w-12 lg:text-2xl">
                       {LETTERS[index]}
                     </span>
-                    <span className="text-2xl font-medium lg:text-4xl">{option.text}</span>
+                    <span className={`min-w-0 break-words text-2xl font-medium ${question.image ? "lg:text-3xl" : "lg:text-4xl"}`}>{option.text}</span>
                   </li>
                 ))}
               </ol>
