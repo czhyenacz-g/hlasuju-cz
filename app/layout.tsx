@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Analytics } from "@vercel/analytics/next";
 import Script from "next/script";
+import SiteAnalytics from "../components/SiteAnalytics.tsx";
 import { GOATCOUNTER_CODE } from "./config/analytics.ts";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "./config/site.ts";
 
@@ -36,7 +36,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="cs">
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         {children}
-        <Analytics />
+        <SiteAnalytics />
         {GOATCOUNTER_CODE && (
           <Script
             data-goatcounter={`https://${GOATCOUNTER_CODE}.goatcounter.com/count`}

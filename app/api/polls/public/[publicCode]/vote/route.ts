@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { castVote } from "../../../../../../lib/polls/cast-vote.ts";
+import { LIMITS } from "../../../../../../lib/polls/limits.ts";
+import { getClientIp, jsonError, readJsonBody, tooManyRequests } from "../../../../../../lib/http.ts";
+import { checkRateLimits, hashIdentifier, RATE_LIMITS, rule } from "../../../../../../lib/rate-limit.ts";
 
 const REASON_STATUS: Record<string, number> = {
   poll_not_found: 404,
@@ -20,25 +23,26 @@ const REASON_MESSAGE: Record<string, string> = {
 export async function POST(request: Request, { params }: { params: Promise<{ publicCode: string }> }) {
   const { publicCode } = await params;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Neplatný JSON." }, { status: 400 });
+  const body = await readJsonBody(request, LIMITS.MAX_SMALL_BODY_BYTES);
+  if (!body.ok) return body.response;
+
+  const { questionId, optionId, participantId } = (body.value ?? {}) as Record<string, unknown>;
+  if (typeof questionId !== "number" || typeof optionId !== "number" || typeof participantId !== "string") {
+    return jsonError("Neplatný požadavek.", 400);
   }
 
-  const { questionId, optionId, participantId } = (body ?? {}) as Record<string, unknown>;
-  if (typeof questionId !== "number" || typeof optionId !== "number" || typeof participantId !== "string") {
-    return NextResponse.json({ error: "Neplatný požadavek." }, { status: 400 });
-  }
+  // IP limit je per hlasování a velkorysý (celá aula za jednou školní
+  // IP), participant limit zastaví klikací smyčky jednoho prohlížeče.
+  const limited = await checkRateLimits([
+    rule("vote-ip-poll", `${hashIdentifier(getClientIp(request))}:${publicCode.slice(0, 12)}`, RATE_LIMITS.votePerIpAndPoll),
+    rule("vote-participant", hashIdentifier(participantId), RATE_LIMITS.votePerParticipant),
+  ]);
+  if (!limited.ok) return tooManyRequests(limited.retryAfterSeconds);
 
   const result = await castVote(publicCode, questionId, optionId, participantId);
 
   if (!result.ok) {
-    return NextResponse.json(
-      { error: REASON_MESSAGE[result.reason] },
-      { status: REASON_STATUS[result.reason] ?? 400 }
-    );
+    return jsonError(REASON_MESSAGE[result.reason], REASON_STATUS[result.reason] ?? 400);
   }
 
   return NextResponse.json({ ok: true });

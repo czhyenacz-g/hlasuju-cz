@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
-import { options, polls, votes } from "../../db/schema.ts";
+import { options, polls, questions, votes } from "../../db/schema.ts";
 
 export type CastVoteResult =
   | { ok: true }
@@ -15,9 +15,10 @@ const MAX_PARTICIPANT_ID_LENGTH = 64;
  * úspěch (idempotentní), ne jako chyba, viz zadání "maximálně
  * jednoduché UX" (žádné "už jsi hlasoval" hlášky).
  *
- * `questionId` musí být PRÁVĚ aktuálně aktivní otázka daného pollu —
- * hlasování na starou/budoucí otázku se odmítne (chrání i proti
- * hlasům poslaným po UKONČIT HLASOVÁNÍ).
+ * `questionId` musí být PRÁVĚ aktuálně aktivní otázka daného pollu ve
+ * stavu "active" — hlasování na starou/budoucí otázku se odmítne
+ * (chrání i proti hlasům poslaným po "Ukončit otázku" a po ukončení
+ * celého hlasování).
  */
 export async function castVote(
   publicCode: string,
@@ -46,12 +47,14 @@ export async function castVote(
   if (poll.activeQuestionId !== questionId) return { ok: false, reason: "question_not_active" };
 
   const [option] = await db
-    .select({ id: options.id })
+    .select({ id: options.id, questionStatus: questions.status })
     .from(options)
-    .where(and(eq(options.id, optionId), eq(options.questionId, questionId)))
+    .innerJoin(questions, eq(options.questionId, questions.id))
+    .where(and(eq(options.id, optionId), eq(options.questionId, questionId), eq(questions.pollId, poll.id)))
     .limit(1);
 
   if (!option) return { ok: false, reason: "option_not_found" };
+  if (option.questionStatus !== "active") return { ok: false, reason: "question_not_active" };
 
   try {
     await db.insert(votes).values({ questionId, optionId, participantId });

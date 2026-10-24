@@ -2,12 +2,18 @@ import "server-only";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions } from "../../db/schema.ts";
+import { questionMediaColumns, toPublicLink, toQuestionImage, toQuestionLink } from "./question-media.ts";
 import type { PublicPollView } from "./types.ts";
 
 /**
  * `null` = poll neexistuje NEBO vypršel (viz zadání "expiraci stačí
  * respektovat při načítání" — WHERE expiresAt > now() přímo v dotazu).
- * Vrací jen to, co účastník smí vidět — nikdy moderatorToken.
+ *
+ * Vrací jen to, co účastník smí vidět: nikdy moderatorToken, nikdy
+ * připravené (nespuštěné) otázky, jen aktuální otázku. Odkaz u otázky
+ * jen po jejím ukončení, nebo když ho moderátor výslovně povolil už
+ * během hlasování (může prozradit správnou odpověď). Až přibude
+ * soutěžní režim, správná odpověď patří stejně jen do `closedQuestion`.
  */
 export async function getPublicPoll(publicCode: string): Promise<PublicPollView | null> {
   const db = getDb();
@@ -26,21 +32,37 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
   if (!poll) return null;
 
   let activeQuestion: PublicPollView["activeQuestion"] = null;
-  if (poll.activeQuestionId) {
+  let closedQuestion: PublicPollView["closedQuestion"] = null;
+
+  if (poll.activeQuestionId && poll.status === "active") {
     const [question] = await db
-      .select({ id: questions.id, text: questions.text })
+      .select({ id: questions.id, text: questions.text, status: questions.status, ...questionMediaColumns })
       .from(questions)
-      .where(eq(questions.id, poll.activeQuestionId))
+      .where(and(eq(questions.id, poll.activeQuestionId), eq(questions.pollId, poll.id)))
       .limit(1);
 
-    if (question) {
+    if (question?.status === "active") {
       const questionOptions = await db
         .select({ id: options.id, text: options.text })
         .from(options)
         .where(eq(options.questionId, question.id))
         .orderBy(options.position);
 
-      activeQuestion = { id: question.id, text: question.text, options: questionOptions };
+      const link = toQuestionLink(question);
+      activeQuestion = {
+        id: question.id,
+        text: question.text,
+        image: toQuestionImage(question),
+        link: link?.showDuringVoting ? toPublicLink(link) : null,
+        options: questionOptions,
+      };
+    } else if (question?.status === "ended") {
+      closedQuestion = {
+        id: question.id,
+        text: question.text,
+        image: toQuestionImage(question),
+        link: toPublicLink(toQuestionLink(question)),
+      };
     }
   }
 
@@ -48,5 +70,6 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
     title: poll.title,
     pollStatus: poll.status as PublicPollView["pollStatus"],
     activeQuestion,
+    closedQuestion,
   };
 }

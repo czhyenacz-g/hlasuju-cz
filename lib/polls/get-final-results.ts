@@ -1,17 +1,25 @@
 import "server-only";
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions, votes } from "../../db/schema.ts";
+import { questionMediaColumns, toPublicLink, toQuestionImage, toQuestionLink } from "./question-media.ts";
 import type { FinalResultsQuestion, FinalResultsView } from "./types.ts";
 
+export type FinalResultsResult =
+  | { ok: true; results: FinalResultsView }
+  | { ok: false; reason: "poll_not_found" | "poll_not_closed" };
+
 /**
- * `null` = poll neexistuje NEBO vypršel. Vrací výsledky VŠECH otázek
- * (na rozdíl od getPublicPoll, který během živého hlasování ukazuje jen
- * aktuálně aktivní otázku — schválně, aby se výsledky neprozrazovaly
- * předčasně). NIKDY nevrací moderatorToken, e-mail moderátora ani cizí
- * participant ID — jen to, jestli DANÝ participantId u dané otázky hlasoval.
+ * Finální výsledky pro účastníky — JEN pro ukončené hlasování. Během
+ * živého hlasování by jinak kdokoli s 6místným kódem viděl i nespuštěné
+ * otázky a průběžné výsledky (a v budoucím soutěžním režimu správné
+ * odpovědi). I po ukončení vrací jen otázky, které moderátor opravdu
+ * spustil — nikdy nespuštěné "připravené".
+ *
+ * NIKDY nevrací moderatorToken, e-mail moderátora ani cizí participant
+ * ID — jen to, jestli DANÝ participantId u dané otázky hlasoval.
  */
-export async function getFinalResults(publicCode: string, participantId: string | null): Promise<FinalResultsView | null> {
+export async function getFinalResults(publicCode: string, participantId: string | null): Promise<FinalResultsResult> {
   const db = getDb();
 
   const [poll] = await db
@@ -20,12 +28,13 @@ export async function getFinalResults(publicCode: string, participantId: string 
     .where(and(eq(polls.publicCode, publicCode), gt(polls.expiresAt, new Date())))
     .limit(1);
 
-  if (!poll) return null;
+  if (!poll) return { ok: false, reason: "poll_not_found" };
+  if (poll.status !== "closed") return { ok: false, reason: "poll_not_closed" };
 
   const questionRows = await db
-    .select({ id: questions.id, text: questions.text, position: questions.position })
+    .select({ id: questions.id, text: questions.text, position: questions.position, ...questionMediaColumns })
     .from(questions)
-    .where(eq(questions.pollId, poll.id))
+    .where(and(eq(questions.pollId, poll.id), ne(questions.status, "prepared")))
     .orderBy(questions.position);
 
   const optionRows = await db
@@ -39,7 +48,7 @@ export async function getFinalResults(publicCode: string, participantId: string 
     .from(options)
     .innerJoin(questions, eq(options.questionId, questions.id))
     .leftJoin(votes, eq(votes.optionId, options.id))
-    .where(eq(questions.pollId, poll.id))
+    .where(and(eq(questions.pollId, poll.id), ne(questions.status, "prepared")))
     .groupBy(options.id)
     .orderBy(options.position);
 
@@ -66,6 +75,8 @@ export async function getFinalResults(publicCode: string, participantId: string 
       id: q.id,
       text: q.text,
       position: q.position,
+      image: toQuestionImage(q),
+      link: toPublicLink(toQuestionLink(q)),
       options: questionOptions,
       totalVotes: questionOptions.reduce((sum, o) => sum + o.votes, 0),
       participantSelectedOptionId: selectedByQuestion.get(q.id) ?? null,
@@ -73,8 +84,11 @@ export async function getFinalResults(publicCode: string, participantId: string 
   });
 
   return {
-    title: poll.title,
-    pollStatus: poll.status as FinalResultsView["pollStatus"],
-    questions: questionViews,
+    ok: true,
+    results: {
+      title: poll.title,
+      pollStatus: poll.status as FinalResultsView["pollStatus"],
+      questions: questionViews,
+    },
   };
 }

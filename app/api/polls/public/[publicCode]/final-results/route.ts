@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFinalResults } from "../../../../../../lib/polls/get-final-results.ts";
+import { jsonError } from "../../../../../../lib/http.ts";
 
 const MAX_PARTICIPANT_ID_LENGTH = 200;
 
@@ -9,10 +10,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ publ
   const raw = new URL(request.url).searchParams.get("participantId");
   const participantId = raw && raw.length > 0 && raw.length <= MAX_PARTICIPANT_ID_LENGTH ? raw : null;
 
-  const results = await getFinalResults(publicCode, participantId);
-  if (!results) {
-    return NextResponse.json({ error: "Hlasování nenalezeno." }, { status: 404 });
+  const result = await getFinalResults(publicCode, participantId);
+  if (!result.ok) {
+    // 409 = hlasování existuje, ale výsledky ještě nejsou veřejné. Žádná
+    // data o otázkách se v odpovědi nevrací.
+    return result.reason === "poll_not_found"
+      ? jsonError("Hlasování nenalezeno.", 404)
+      : jsonError("Výsledky budou dostupné po ukončení hlasování.", 409);
   }
 
-  return NextResponse.json(results);
+  return NextResponse.json(result.results);
 }

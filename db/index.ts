@@ -1,5 +1,6 @@
 import "server-only";
-import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema.ts";
 
@@ -9,9 +10,13 @@ import * as schema from "./schema.ts";
 // lokální build bez .env.local) nesmí shodit celý build, jen skutečné
 // volání DB při requestu (viz zadání "vytvoření hlasování nesmí
 // spadnout" — stejný fail-safe duch, teď pro DB, ne pro Resend).
-let cached: PostgresJsDatabase<typeof schema> | null = null;
+// Obecný Postgres typ (ne konkrétně postgres-js), aby testy mohly
+// podstrčit in-memory PGlite přes setDbForTesting().
+export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 
-export function getDb(): PostgresJsDatabase<typeof schema> {
+let cached: Db | null = null;
+
+export function getDb(): Db {
   if (cached) return cached;
 
   const connectionString = process.env.DATABASE_URL;
@@ -28,4 +33,9 @@ export function getDb(): PostgresJsDatabase<typeof schema> {
   const client = postgres(connectionString, { prepare: false });
   cached = drizzle(client, { schema });
   return cached;
+}
+
+/** Jen pro testy (test/helpers/db.ts) — produkční kód tohle nevolá. */
+export function setDbForTesting(db: Db | null): void {
+  cached = db;
 }

@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { usePolling } from "../../lib/use-polling.ts";
 import { getOrCreateParticipantId } from "../../lib/participant-id.ts";
 import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx";
+import QuestionImage from "../../components/QuestionImage.tsx";
+import QuestionLink from "../../components/QuestionLink.tsx";
 import ResultsBarChart from "../../components/ResultsBarChart.tsx";
 import type { FinalResultsView, PublicPollView } from "../../lib/polls/types.ts";
 
@@ -13,7 +15,7 @@ import type { FinalResultsView, PublicPollView } from "../../lib/polls/types.ts"
 // tohle je jen pro instantní UX bez čekání na chybu z API.
 export default function PollParticipant({ publicCode }: { publicCode: string }) {
   const [participantId, setParticipantId] = useState<string | null>(null);
-  const [votedQuestionId, setVotedQuestionId] = useState<number | null>(null);
+  const [voted, setVoted] = useState<{ questionId: number; optionText: string } | null>(null);
   const [voting, setVoting] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
 
@@ -23,7 +25,7 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
 
   const fetcher = useCallback(
     async (signal: AbortSignal) => {
-      const response = await fetch(`/api/polls/public/${publicCode}`, { signal });
+      const response = await fetch(`/api/polls/public/${publicCode}`, { signal, cache: "no-store" });
       if (response.status === 404) return { notFound: true as const };
       if (!response.ok) throw new Error("Nepodařilo se načíst hlasování.");
       const data: PublicPollView = await response.json();
@@ -35,15 +37,16 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   const { data, error } = usePolling(fetcher);
 
   const activeQuestion = data && !data.notFound ? data.poll.activeQuestion : null;
+  const closedQuestion = data && !data.notFound ? data.poll.closedQuestion : null;
 
   useEffect(() => {
-    if (activeQuestion && votedQuestionId !== null && votedQuestionId !== activeQuestion.id) {
-      setVotedQuestionId(null);
+    if (activeQuestion && voted !== null && voted.questionId !== activeQuestion.id) {
+      setVoted(null);
       setVoteError(null);
     }
-  }, [activeQuestion, votedQuestionId]);
+  }, [activeQuestion, voted]);
 
-  async function castVote(optionId: number) {
+  async function castVote(optionId: number, optionText: string) {
     if (!activeQuestion || !participantId || voting) return;
     setVoting(true);
     setVoteError(null);
@@ -59,7 +62,7 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
         setVoting(false);
         return;
       }
-      setVotedQuestionId(activeQuestion.id);
+      setVoted({ questionId: activeQuestion.id, optionText });
     } catch {
       setVoteError("Hlas se nepodařilo zaznamenat. Zkuste to prosím znovu.");
     } finally {
@@ -87,30 +90,56 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
     return <FinalResultsSection publicCode={publicCode} participantId={participantId} />;
   }
 
+  if (closedQuestion) {
+    // Fáze vyhodnocení: moderátor otázku ukončil, další ještě nespustil.
+    // Teprve tady se odkrývá odkaz (může obsahovat správnou odpověď).
+    return (
+      <StateScreen title="Hlasování u otázky skončilo" message="Čekáme na další otázku…" showAd>
+        <div className="mt-6 text-left">
+          <p className="font-semibold text-gray-900">{closedQuestion.text}</p>
+          {closedQuestion.link && <QuestionLink link={closedQuestion.link} className="mt-3" />}
+        </div>
+      </StateScreen>
+    );
+  }
+
   if (!activeQuestion) {
     return (
       <StateScreen title="Jste připojeni" message="Čekáme na další otázku moderátora…" showAd />
     );
   }
 
-  if (votedQuestionId === activeQuestion.id) {
+  if (voted?.questionId === activeQuestion.id) {
     // Hlas je odeslaný, hlavní úkol dokončen -> compact banner je tu v
     // pořádku (viz zadání "zobraz ho ve chvíli, kdy uživatel odešle
     // odpověď"), nikdy ale nad/mezi otázkou a odpověďmi výš.
-    return <StateScreen title="✓ Hlas byl zaznamenán" message="Čekáme na další otázku…" showAd />;
+    return (
+      <StateScreen title="✓ Hlas byl zaznamenán" message="Čekáme na další otázku…" showAd>
+        {voted.optionText && (
+          <p className="mt-4 rounded-xl bg-brand/5 px-4 py-3 text-gray-800">
+            Vaše odpověď: <span className="font-semibold">{voted.optionText}</span>
+          </p>
+        )}
+      </StateScreen>
+    );
   }
 
+  // Obrázek smí zabrat jen část výšky displeje, aby odpovědi zůstaly
+  // dosažitelné bez dlouhého scrollování; detail ukáže zvětšení (tap).
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
+    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-6 sm:py-10">
       <div className="w-full max-w-md">
+        {activeQuestion.image && (
+          <QuestionImage image={activeQuestion.image} maxHeightClass="max-h-[32vh] sm:max-h-[40vh]" className="mb-5" priority />
+        )}
         <h1 className="text-center text-2xl font-bold text-gray-900 sm:text-3xl">{activeQuestion.text}</h1>
 
-        <div className="mt-8 flex flex-col gap-3">
+        <div className="mt-6 flex flex-col gap-3 sm:mt-8">
           {activeQuestion.options.map((option) => (
             <button
               key={option.id}
               type="button"
-              onClick={() => castVote(option.id)}
+              onClick={() => castVote(option.id, option.text)}
               disabled={voting || !participantId}
               className="min-h-[64px] w-full rounded-2xl border-2 border-gray-200 bg-white px-6 py-4 text-lg font-semibold text-gray-900 transition hover:border-brand hover:text-brand disabled:opacity-60"
             >
@@ -120,17 +149,30 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
         </div>
 
         {voteError && <p className="mt-4 text-center text-sm text-red-600">{voteError}</p>}
+
+        {activeQuestion.link && <QuestionLink link={activeQuestion.link} className="mt-6" />}
       </div>
     </main>
   );
 }
 
-function StateScreen({ title, message, showAd = false }: { title: string; message: string; showAd?: boolean }) {
+function StateScreen({
+  title,
+  message,
+  showAd = false,
+  children,
+}: {
+  title: string;
+  message: string;
+  showAd?: boolean;
+  children?: ReactNode;
+}) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10 text-center">
       <div className="w-full max-w-sm">
         <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
         <p className="mt-3 text-gray-600">{message}</p>
+        {children}
         {showAd && (
           <div className="mt-10">
             <AlphegaAffiliateBanner variant="compact" />
@@ -188,6 +230,11 @@ function FinalResultsSection({ publicCode, participantId }: { publicCode: string
             {q.participantSelectedOptionId === null && (
               <p className="mt-2 text-sm text-gray-500">Na tuto otázku jste nehlasoval/a.</p>
             )}
+            {q.image && (
+              <div className="mt-3">
+                <QuestionImage image={q.image} maxHeightClass="max-h-56" />
+              </div>
+            )}
             <div className="mt-4">
               <ResultsBarChart
                 options={q.options}
@@ -195,6 +242,7 @@ function FinalResultsSection({ publicCode, participantId }: { publicCode: string
                 selectedOptionId={q.participantSelectedOptionId}
               />
             </div>
+            {q.link && <QuestionLink link={q.link} className="mt-3" />}
           </section>
         ))}
       </div>

@@ -19,6 +19,10 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
   const moderatorToken = generateModeratorToken();
   const expiresAt = new Date(Date.now() + LIMITS.POLL_TTL_DAYS * 24 * 60 * 60 * 1000);
 
+  // ID otázek vrací kvůli editoru: obrázky jde nahrát až s moderátorským
+  // tokenem, takže editor je po vytvoření nahraje a doplní uložením obsahu.
+  const questionIds: number[] = [];
+
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
     const publicCode = generatePublicCode();
 
@@ -36,6 +40,7 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
           })
           .returning({ id: polls.id });
 
+        questionIds.length = 0;
         for (const [index, question] of input.questions.entries()) {
           const [insertedQuestion] = await tx
             .insert(questions)
@@ -44,8 +49,12 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
               text: question.text,
               position: index,
               status: "prepared",
+              linkUrl: question.link?.url ?? null,
+              linkLabel: question.link?.label ?? null,
+              linkShowDuringVoting: question.link?.showDuringVoting ?? false,
             })
             .returning({ id: questions.id });
+          questionIds.push(insertedQuestion.id);
 
           await tx.insert(options).values(
             question.options.map((option, optionIndex) => ({
@@ -57,7 +66,7 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
         }
       });
 
-      return { publicCode, moderatorToken };
+      return { publicCode, moderatorToken, questionIds };
     } catch (error) {
       // 23505 = unique_violation (Postgres) — jen na publicCode kolizi
       // zkusíme znovu s novým kódem, cokoliv jiného propustíme dál.

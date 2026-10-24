@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions, votes } from "../../db/schema.ts";
+import { questionMediaColumns, toQuestionImage, toQuestionLink } from "./question-media.ts";
 import type { ModeratorPollView, ModeratorQuestionView } from "./types.ts";
 
 /**
@@ -28,7 +29,13 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
   if (!poll) return null;
 
   const questionRows = await db
-    .select({ id: questions.id, text: questions.text, position: questions.position, status: questions.status })
+    .select({
+      id: questions.id,
+      text: questions.text,
+      position: questions.position,
+      status: questions.status,
+      ...questionMediaColumns,
+    })
     .from(questions)
     .where(eq(questions.pollId, poll.id))
     .orderBy(questions.position);
@@ -62,6 +69,8 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       text: q.text,
       position: q.position,
       status: q.status as ModeratorQuestionView["status"],
+      image: toQuestionImage(q),
+      link: toQuestionLink(q),
       options: questionOptions,
       totalVotes: questionOptions.reduce((sum, o) => sum + o.votes, 0),
     };
