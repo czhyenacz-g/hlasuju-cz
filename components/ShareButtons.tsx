@@ -39,13 +39,14 @@ export default function ShareButtons({ url, text, compact = false }: { url: stri
     { label: "WhatsApp", href: `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}` },
     { label: "E-mail", href: `mailto:?subject=${encodeURIComponent(text)}&body=${encodeURIComponent(`${text}\n${url}`)}` },
   ];
-  const buttonClass =
-    "inline-flex min-h-[44px] items-center justify-center rounded-xl border-2 border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20";
+  const baseClass =
+    "inline-flex min-h-[44px] items-center justify-center rounded-xl border-2 px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20";
+  const buttonClass = `${baseClass} border-gray-200 bg-white text-gray-800 hover:border-brand hover:text-brand`;
 
   return (
     <div className={compact ? "flex flex-wrap justify-center gap-2" : "flex flex-wrap gap-2"}>
       {canShare && (
-        <button type="button" onClick={nativeShare} className={`${buttonClass} border-brand bg-brand text-white hover:bg-brand-dark hover:text-white`}>
+        <button type="button" onClick={nativeShare} className={`${baseClass} border-brand bg-brand text-white hover:border-brand-dark hover:bg-brand-dark`}>
           Sdílet…
         </button>
       )}
