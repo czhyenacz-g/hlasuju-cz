@@ -18,16 +18,26 @@ export default function ModeratorFinalSummary({
   onEmailSent,
   onCopyLink,
   copyLabel,
+  onNewRun,
+  newRunPending,
+  newRunError,
 }: {
   poll: ModeratorPollView;
   moderatorToken: string;
   onEmailSent: () => void;
   onCopyLink: () => void;
   copyLabel: string;
+  onNewRun: () => void;
+  newRunPending: boolean;
+  newRunError: string | null;
 }) {
   const [showDetails, setShowDetails] = useState(false);
-  const launched = poll.questions.filter((question) => question.status !== "prepared");
-  const notLaunched = poll.questions.length - launched.length;
+  // Jen otázky — obsahové, výsledkové a žebříčkové slajdy nejsou výsledky.
+  const questions = poll.questions.filter((question) => question.kind === "question");
+  const launched = questions.filter((question) => question.status !== "prepared");
+  const notLaunched = questions.length - launched.length;
+  // Konečné pořadí = poslední žebříček prezentace (je-li nějaký).
+  const finalBoard = [...poll.questions].reverse().find((slide) => slide.kind === "leaderboard" && slide.leaderboard?.scoredQuestionsTotal)?.leaderboard;
   const success = overallSuccess(launched);
 
   return (
@@ -90,6 +100,24 @@ export default function ModeratorFinalSummary({
         </div>
       )}
 
+      {finalBoard && finalBoard.entries.length > 0 && (
+        <section className="mt-8 rounded-3xl border border-gray-200 bg-white p-5 shadow-soft">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Pořadí účastníků (poslední žebříček)</h2>
+          <ol className="mt-3 flex flex-col gap-1 text-sm">
+            {finalBoard.entries.slice(0, 10).map((entry) => (
+              <li key={`${entry.rank}-${entry.label}`} className="flex items-center gap-3">
+                <span className="w-16 shrink-0 font-semibold text-brand-dark">
+                  {entry.rank}.{entry.tied && <span className="ml-1 text-xs font-normal text-gray-500">shoda</span>}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-gray-800">{entry.label}</span>
+                <span className="shrink-0 font-semibold tabular-nums">{entry.points} b.</span>
+              </li>
+            ))}
+          </ol>
+          {finalBoard.entries.length > 10 && <p className="mt-2 text-xs text-gray-500">… a dalších {finalBoard.entries.length - 10} účastníků</p>}
+        </section>
+      )}
+
       <section className="mt-8 rounded-3xl border border-gray-200 bg-pastel-blue/60 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Sdílení a export</h2>
         <div className="mt-3 flex flex-wrap gap-3">
@@ -118,6 +146,25 @@ export default function ModeratorFinalSummary({
           />
         </div>
       </section>
+
+      {poll.mode === "live" && (
+      <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Promítat znovu</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          Stejnou prezentaci můžete pustit dalšímu publiku. Vznikne nový kód a nový odkaz na řízení, odpovědi a body začnou od nuly. Tyto výsledky
+          zůstanou beze změny.
+        </p>
+        <button
+          type="button"
+          onClick={onNewRun}
+          disabled={newRunPending}
+          className="mt-3 rounded-xl border-2 border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-800 hover:border-brand hover:text-brand disabled:opacity-60"
+        >
+          {newRunPending ? "Vytvářím…" : "Nové promítání pro jiné publikum"}
+        </button>
+        {newRunError && <p className="mt-2 text-sm text-red-600">{newRunError}</p>}
+      </section>
+      )}
 
       <div className="mt-12">
         <AlphegaAffiliateBanner variant="standard" />

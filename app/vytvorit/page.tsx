@@ -18,8 +18,8 @@ export default function CreatePollPage() {
       </Link>
       <h1 className="mt-6 text-3xl font-bold tracking-tight text-gray-900">Vytvořit hlasování</h1>
       <p className="mt-2 text-gray-600">
-        Přidejte otázky, odpovědi a případně obrázek nebo odkaz. Po vytvoření dostanete kód pro účastníky a moderátorský odkaz — přes něj
-        můžete otázky později i upravit.
+        Přidejte otázky a odpovědi, případně i obsahové slajdy, výsledky otázek a žebříček — z hlasování tak bude celá interaktivní
+        prezentace. Po vytvoření dostanete kód pro účastníky a moderátorský odkaz — přes něj můžete vše později i upravit.
       </p>
       <div className="mt-8">
         <PollEditor mode="create" imagesEnabled={isImageStorageConfigured()} />

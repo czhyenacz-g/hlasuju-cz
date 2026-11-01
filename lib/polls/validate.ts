@@ -1,5 +1,5 @@
 import { LIMITS } from "./limits.ts";
-import type { CreatePollInput, QuestionImage, QuestionLink, UpdatePollInput, UpdatePollQuestionInput } from "./types.ts";
+import type { CreatePollInput, QuestionImage, QuestionLink, SlideKind, UpdatePollInput, UpdatePollQuestionInput } from "./types.ts";
 
 export type ValidationResult = { ok: true; value: CreatePollInput } | { ok: false; error: string };
 export type UpdateValidationResult = { ok: true; value: UpdatePollInput } | { ok: false; error: string };
@@ -115,32 +115,127 @@ function validateTitle(raw: unknown): FieldResult<string | undefined> {
   return { ok: true, value: trimmed || undefined };
 }
 
+const SLIDE_KINDS: readonly SlideKind[] = ["question", "content", "results", "leaderboard"];
+
+const SLIDE_LABEL: Record<SlideKind, string> = {
+  question: "Otázka",
+  content: "Obsahový slajd",
+  results: "Výsledky otázky",
+  leaderboard: "Žebříček",
+};
+
+function validateOptionalText(raw: unknown, max: number, what: string): FieldResult<string> {
+  if (raw === undefined || raw === null) return { ok: true, value: "" };
+  if (typeof raw !== "string") return { ok: false, error: `${what} musí být text.` };
+  // Konce řádků sjednotit, okraje oříznout — odstavce uvnitř zůstávají.
+  const value = raw.replace(/\r\n?/g, "\n").trim();
+  if (value.length > max) return { ok: false, error: `${what} může mít nejvýš ${max} znaků.` };
+  return { ok: true, value };
+}
+
 /**
- * Společná validace seznamu otázek pro vytvoření i editaci.
+ * Společná validace seznamu slajdů (otázek) pro vytvoření i editaci.
  * "create" = bez ID a bez obrázků (obrázek jde nahrát až s moderátorským
  * tokenem, tj. po vytvoření), "update" = ID existujících otázek/odpovědí
  * a obrázky povolené.
+ *
+ * Typy slajdů: otázka (jako dosud), obsah (nadpis/text/obrázek), výsledky
+ * otázky (vazba indexem na dřívější otázku v témže seznamu) a žebříček
+ * (jen nadpis). Slajdy, které nejsou otázkou, nemají odpovědi, správnou
+ * odpověď ani odkaz.
  */
 function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult<UpdatePollQuestionInput[]> {
   if (!Array.isArray(raw) || raw.length === 0) {
     return { ok: false, error: "Přidejte aspoň jednu otázku." };
   }
-  if (raw.length > LIMITS.MAX_QUESTIONS) {
-    return { ok: false, error: `Hlasování může mít nejvýš ${LIMITS.MAX_QUESTIONS} otázek.` };
+  if (raw.length > LIMITS.MAX_SLIDES) {
+    return { ok: false, error: `Prezentace může mít nejvýš ${LIMITS.MAX_SLIDES} slajdů.` };
   }
 
   const questions: UpdatePollQuestionInput[] = [];
+  let questionCount = 0;
   for (const [index, rawQuestion] of raw.entries()) {
-    const prefix = `Otázka ${index + 1}`;
     if (typeof rawQuestion !== "object" || rawQuestion === null) {
-      return { ok: false, error: `${prefix}: neplatný formát.` };
+      return { ok: false, error: `Otázka ${index + 1}: neplatný formát.` };
     }
     const q = rawQuestion as Record<string, unknown>;
+
+    const kind: SlideKind | null = q.kind === undefined || q.kind === null ? "question" : SLIDE_KINDS.find((k) => k === q.kind) ?? null;
+    if (!kind) return { ok: false, error: `Slajd ${index + 1}: neznámý typ slajdu.` };
+    const prefix = kind === "question" ? `Otázka ${index + 1}` : `Slajd ${index + 1} (${SLIDE_LABEL[kind]})`;
 
     let id: number | undefined;
     if (mode === "update" && q.id !== undefined && q.id !== null) {
       if (!isId(q.id)) return { ok: false, error: `${prefix}: neplatné ID.` };
       id = q.id;
+    }
+
+    let image: UpdatePollQuestionInput["image"] = null;
+    if (kind === "question" || kind === "content") {
+      if (mode === "update") {
+        const validatedImage = validateImageInput(q.image);
+        if (!validatedImage.ok) return { ok: false, error: `${prefix}: ${validatedImage.error}` };
+        image = validatedImage.value;
+      } else if (q.image !== undefined && q.image !== null) {
+        return { ok: false, error: `${prefix}: obrázek lze nahrát až po vytvoření hlasování.` };
+      }
+    } else if (q.image !== undefined && q.image !== null) {
+      return { ok: false, error: `${prefix}: tento typ slajdu nemá obrázek.` };
+    }
+
+    if (kind !== "question") {
+      if ((Array.isArray(q.options) && q.options.length > 0) || (q.options !== undefined && q.options !== null && !Array.isArray(q.options))) {
+        return { ok: false, error: `${prefix}: tento typ slajdu nemá odpovědi.` };
+      }
+      if ((q.correctOptionIndex !== undefined && q.correctOptionIndex !== null) || (q.link !== undefined && q.link !== null)) {
+        return { ok: false, error: `${prefix}: tento typ slajdu nemá správnou odpověď ani odkaz.` };
+      }
+
+      const title = validateOptionalText(q.text, LIMITS.MAX_QUESTION_LENGTH, "Nadpis");
+      if (!title.ok) return { ok: false, error: `${prefix}: ${title.error}` };
+
+      let body: string | null = null;
+      if (kind === "content") {
+        const validatedBody = validateOptionalText(q.body, LIMITS.MAX_SLIDE_BODY_LENGTH, "Text");
+        if (!validatedBody.ok) return { ok: false, error: `${prefix}: ${validatedBody.error}` };
+        body = validatedBody.value || null;
+        // Při vytváření ještě nemůže mít obrázek (nahraje se hned potom),
+        // úplně prázdný slajd hlídá editor; při ukládání už ho odmítne server.
+        if (mode === "update" && !title.value && !body && !image) {
+          return { ok: false, error: `${prefix}: vyplňte nadpis, text nebo přidejte obrázek.` };
+        }
+      } else if (q.body !== undefined && q.body !== null && q.body !== "") {
+        return { ok: false, error: `${prefix}: tento typ slajdu nemá text.` };
+      }
+
+      let resultsQuestionIndex: number | null = null;
+      if (kind === "results" && q.resultsQuestionIndex !== undefined && q.resultsQuestionIndex !== null) {
+        const target = q.resultsQuestionIndex;
+        const targetKind = Number.isInteger(target) ? (raw[target as number] as Record<string, unknown> | undefined)?.kind ?? "question" : null;
+        if (!Number.isInteger(target) || (target as number) < 0 || (target as number) >= index || targetKind !== "question") {
+          return { ok: false, error: `${prefix}: vyberte otázku, která je v prezentaci před tímto slajdem.` };
+        }
+        resultsQuestionIndex = target as number;
+      }
+
+      questions.push({
+        ...(id === undefined ? {} : { id }),
+        kind,
+        text: title.value,
+        options: [],
+        image,
+        link: null,
+        correctOptionIndex: null,
+        body,
+        resultsQuestionIndex,
+        points: 1,
+      });
+      continue;
+    }
+
+    questionCount++;
+    if (questionCount > LIMITS.MAX_QUESTIONS) {
+      return { ok: false, error: `Hlasování může mít nejvýš ${LIMITS.MAX_QUESTIONS} otázek.` };
     }
 
     if (typeof q.text !== "string" || q.text.trim().length === 0) {
@@ -185,15 +280,6 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
     const link = validateLinkInput(q.link);
     if (!link.ok) return { ok: false, error: `${prefix}: ${link.error}` };
 
-    let image: UpdatePollQuestionInput["image"] = null;
-    if (mode === "update") {
-      const validatedImage = validateImageInput(q.image);
-      if (!validatedImage.ok) return { ok: false, error: `${prefix}: ${validatedImage.error}` };
-      image = validatedImage.value;
-    } else if (q.image !== undefined && q.image !== null) {
-      return { ok: false, error: `${prefix}: obrázek lze nahrát až po vytvoření hlasování.` };
-    }
-
     // Nepovinná správná odpověď = index do `options` (nejvýš jedna z principu).
     let correctOptionIndex: number | null = null;
     if (q.correctOptionIndex !== undefined && q.correctOptionIndex !== null) {
@@ -203,7 +289,27 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       correctOptionIndex = q.correctOptionIndex as number;
     }
 
-    questions.push({ ...(id === undefined ? {} : { id }), text, options, image, link: link.value, correctOptionIndex });
+    // Body za správnou odpověď (bez správné odpovědi se nepoužijí).
+    let points = 1;
+    if (q.points !== undefined && q.points !== null) {
+      if (!Number.isInteger(q.points) || (q.points as number) < 1 || (q.points as number) > LIMITS.MAX_POINTS) {
+        return { ok: false, error: `${prefix}: body musí být celé číslo 1–${LIMITS.MAX_POINTS}.` };
+      }
+      points = q.points as number;
+    }
+
+    questions.push({
+      ...(id === undefined ? {} : { id }),
+      kind,
+      text,
+      options,
+      image,
+      link: link.value,
+      correctOptionIndex,
+      body: null,
+      resultsQuestionIndex: null,
+      points,
+    });
   }
 
   return { ok: true, value: questions };
@@ -256,7 +362,7 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
   const mode = body.mode === undefined || body.mode === "live" ? "live" : body.mode === "self_service" ? "self_service" : null;
   if (!mode) return { ok: false, error: "Neplatný typ hlasování." };
   if (mode === "self_service") {
-    if (questions.value.length !== 1) return { ok: false, error: "Anketa pro web má právě jednu otázku." };
+    if (questions.value.length !== 1 || questions.value[0].kind !== "question") return { ok: false, error: "Anketa pro web má právě jednu otázku." };
     if (body.requireParticipantName === true) return { ok: false, error: "Anketa pro web je vždy anonymní." };
   }
 
@@ -268,10 +374,14 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
       mode,
       requireParticipantName: body.requireParticipantName === true,
       questions: questions.value.map((q) => ({
+        kind: q.kind,
         text: q.text,
         options: q.options.map((o) => ({ text: o.text })),
         link: q.link,
         correctOptionIndex: q.correctOptionIndex,
+        body: q.body,
+        resultsQuestionIndex: q.resultsQuestionIndex,
+        points: q.points,
       })),
     },
   };

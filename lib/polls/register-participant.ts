@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
-import { participants, polls } from "../../db/schema.ts";
+import { participants, polls, questions, votes } from "../../db/schema.ts";
 import { normalizeParticipantName } from "./validate.ts";
 
 export type RegisterParticipantResult =
@@ -47,4 +47,38 @@ export async function registerParticipant(
     .limit(1);
 
   return { ok: true, name: stored.name };
+}
+
+export type ParticipantState = { name: string | null; votes: Record<string, number> };
+
+/**
+ * Stav JEDNOHO účastníka po obnovení stránky: jeho vlastní jméno (jen u
+ * jmenovitého hlasování) a odpovědi, které už odeslal (ID otázky → ID
+ * odpovědi). Nikdy nic o ostatních účastnících. `null` = hlasování
+ * neexistuje nebo neplatné participantId.
+ */
+export async function getParticipantState(publicCode: string, participantId: unknown): Promise<ParticipantState | null> {
+  if (typeof participantId !== "string" || participantId.length === 0 || participantId.length > MAX_PARTICIPANT_ID_LENGTH) return null;
+  const db = getDb();
+  const [poll] = await db
+    .select({ id: polls.id, requireParticipantName: polls.requireParticipantName })
+    .from(polls)
+    .where(and(eq(polls.publicCode, publicCode), gt(polls.expiresAt, new Date())))
+    .limit(1);
+  if (!poll) return null;
+
+  const [registered] = poll.requireParticipantName
+    ? await db
+        .select({ name: participants.name })
+        .from(participants)
+        .where(and(eq(participants.pollId, poll.id), eq(participants.participantId, participantId)))
+        .limit(1)
+    : [];
+  const myVotes = await db
+    .select({ questionId: votes.questionId, optionId: votes.optionId })
+    .from(votes)
+    .innerJoin(questions, eq(votes.questionId, questions.id))
+    .where(and(eq(questions.pollId, poll.id), eq(votes.participantId, participantId)));
+
+  return { name: registered?.name ?? null, votes: Object.fromEntries(myVotes.map((vote) => [String(vote.questionId), vote.optionId])) };
 }

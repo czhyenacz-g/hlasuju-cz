@@ -2,6 +2,11 @@ export type PollStatus = "active" | "closed";
 export type QuestionStatus = "prepared" | "active" | "ended";
 /** "live" = živé hlasování s moderátorem, "self_service" = veřejná anketa (jedna otázka, hlasuje se hned). */
 export type PollMode = "live" | "self_service";
+/**
+ * Typ slajdu prezentace. Historická data jsou vždy "question". Jen otázka
+ * má odpovědi a hlasy; ostatní slajdy zůstávají ve stavu "prepared".
+ */
+export type SlideKind = "question" | "content" | "results" | "leaderboard";
 
 export type QuestionImage = { url: string; width: number; height: number; alt: string | null };
 export type QuestionLink = { url: string; label: string | null; showDuringVoting: boolean };
@@ -9,10 +14,19 @@ export type QuestionLink = { url: string; label: string | null; showDuringVoting
 export type CreatePollOptionInput = { text: string };
 /** `correctOptionIndex` = pořadí správné odpovědi v `options`, null = bez správné odpovědi. */
 export type CreatePollQuestionInput = {
+  /** Výchozí "question". */
+  kind?: SlideKind;
+  /** Otázka: text otázky; obsah: nadpis (může být prázdný); žebříček: vlastní nadpis. */
   text: string;
   options: CreatePollOptionInput[];
   link?: QuestionLink | null;
   correctOptionIndex?: number | null;
+  /** Obsahový slajd: text (odstavce oddělené prázdným řádkem). */
+  body?: string | null;
+  /** Výsledkový slajd: index otázky ve stejném seznamu (musí být před ním). */
+  resultsQuestionIndex?: number | null;
+  /** Body za správnou odpověď (výchozí 1). */
+  points?: number;
 };
 export type CreatePollInput = {
   title?: string;
@@ -30,11 +44,16 @@ export type CreatePollResult = { publicCode: string; moderatorToken: string; que
 export type UpdatePollOptionInput = { id?: number; text: string };
 export type UpdatePollQuestionInput = {
   id?: number;
+  kind?: SlideKind;
   text: string;
   options: UpdatePollOptionInput[];
   image: QuestionImage | null;
   link: QuestionLink | null;
   correctOptionIndex: number | null;
+  body?: string | null;
+  /** Index cílové otázky v `questions` téhož požadavku (ID nových otázek ještě neexistují). */
+  resultsQuestionIndex?: number | null;
+  points?: number;
 };
 export type UpdatePollInput = {
   version: number;
@@ -74,11 +93,34 @@ export type PublicPollView = {
     /** Jen tady (otázka ukončená) — nikdy v `activeQuestion`. */
     correctOptionId: number | null;
   } | null;
+  /**
+   * Promítá se slajd, který není otázkou (obsah, výsledky, žebříček).
+   * Účastník vidí jen stav „Prezentace pokračuje“, u výsledků navíc
+   * vyhodnocení své odpovědi (`closedQuestion`). Obsah slajdu se neposílá.
+   */
+  slide: { kind: Exclude<SlideKind, "question"> } | null;
+};
+
+/** Řádek žebříčku. `tied` = sdílené umístění s jiným účastníkem. */
+export type LeaderboardEntry = { rank: number; tied: boolean; label: string; points: number };
+export type LeaderboardView = {
+  entries: LeaderboardEntry[];
+  /** Kolik bodovaných otázek před slajdem už bylo uzavřeno (započteno). */
+  scoredQuestions: number;
+  /** Kolik bodovaných otázek před slajdem je celkem (i neodehraných). */
+  scoredQuestionsTotal: number;
+  maxPoints: number;
 };
 
 export type ModeratorQuestionView = {
   id: number;
+  kind: SlideKind;
   text: string;
+  body: string | null;
+  resultsQuestionId: number | null;
+  points: number;
+  /** Jen u slajdu žebříčku. */
+  leaderboard: LeaderboardView | null;
   position: number;
   status: QuestionStatus;
   totalVotes: number;
@@ -105,7 +147,11 @@ export type ModeratorPollView = {
 /** Obsah pro editor (/m/<token>/upravit). `locked` = otázka už byla spuštěná nebo má hlasy. */
 export type EditorQuestion = {
   id: number;
+  kind: SlideKind;
   text: string;
+  body: string | null;
+  resultsQuestionId: number | null;
+  points: number;
   status: QuestionStatus;
   locked: boolean;
   voteCount: number;
@@ -120,6 +166,8 @@ export type EditorContent = {
   title: string | null;
   pollStatus: PollStatus;
   mode: PollMode;
+  /** Žebříček ukazuje jména jen u jmenovitého hlasování. */
+  requireParticipantName: boolean;
   version: number;
   questions: EditorQuestion[];
 };

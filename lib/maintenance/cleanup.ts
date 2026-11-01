@@ -65,7 +65,12 @@ export async function runCleanup(now: Date = new Date()): Promise<CleanupSummary
       and(
         isNull(pollImages.deletedAt),
         or(
-          lt(polls.expiresAt, new Date(now.getTime() - EXPIRED_GRACE_MS)),
+          and(
+            lt(polls.expiresAt, new Date(now.getTime() - EXPIRED_GRACE_MS)),
+            // Kopie prezentace (nový běh, lib/polls/duplicate-poll.ts) sdílí
+            // obrázky originálu — nemazat, dokud je používá platné hlasování.
+            sql`not exists (select 1 from ${questions} q join ${polls} p on p.id = q.poll_id where q.image_url = ${pollImages.url} and p.expires_at >= ${new Date(now.getTime() - EXPIRED_GRACE_MS).toISOString()}::timestamptz)`
+          ),
           and(
             lt(pollImages.createdAt, new Date(now.getTime() - ORPHAN_GRACE_MS)),
             sql`not exists (select 1 from ${questions} where ${questions.imageUrl} = ${pollImages.url})`

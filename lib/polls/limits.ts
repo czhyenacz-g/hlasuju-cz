@@ -4,6 +4,15 @@
 export const LIMITS = {
   MAX_TITLE_LENGTH: 200,
   MAX_QUESTIONS: 30,
+  // Prezentace: otázky + obsahové, výsledkové a žebříčkové slajdy celkem.
+  MAX_SLIDES: 60,
+  MAX_SLIDE_BODY_LENGTH: 1500,
+  // Od kolika znaků editor upozorní, že text bude na plátně hůř čitelný.
+  SLIDE_BODY_WARN_LENGTH: 400,
+  SLIDE_TITLE_WARN_LENGTH: 90,
+  MAX_POINTS: 100,
+  // Žebříček na plátně: kolik míst na jednu stránku.
+  LEADERBOARD_PAGE_SIZE: 10,
   MIN_OPTIONS: 2,
   MAX_OPTIONS: 10,
   MAX_QUESTION_LENGTH: 300,

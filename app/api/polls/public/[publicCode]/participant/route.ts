@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { registerParticipant } from "../../../../../../lib/polls/register-participant.ts";
+import { getParticipantState, registerParticipant } from "../../../../../../lib/polls/register-participant.ts";
 import { LIMITS } from "../../../../../../lib/polls/limits.ts";
 import { getClientIp, jsonError, readJsonBody, tooManyRequests } from "../../../../../../lib/http.ts";
 import { checkRateLimits, hashIdentifier, RATE_LIMITS, rule } from "../../../../../../lib/rate-limit.ts";
@@ -35,4 +35,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ pub
     return jsonError(message, status);
   }
   return NextResponse.json({ name: result.name });
+}
+
+/**
+ * Obnovení stavu účastníka po reloadu stránky: jeho jméno a už odeslané
+ * odpovědi (jen vlastní, podle participantId z jeho prohlížeče). Nikdy
+ * se necachuje — na rozdíl od společného stavu hlasování je per účastník.
+ */
+export async function GET(request: Request, { params }: { params: Promise<{ publicCode: string }> }) {
+  const { publicCode } = await params;
+  const participantId = new URL(request.url).searchParams.get("participantId");
+  const headers = { "Cache-Control": "private, no-store" };
+
+  const limited = await checkRateLimits([rule("participant-state-ip", hashIdentifier(getClientIp(request)), RATE_LIMITS.participantStatePerIp)]);
+  if (!limited.ok) return tooManyRequests(limited.retryAfterSeconds);
+
+  const state = await getParticipantState(publicCode, participantId);
+  if (!state) return jsonError("Hlasování nenalezeno.", 404, undefined, headers);
+  return NextResponse.json(state, { headers });
 }

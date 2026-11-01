@@ -35,19 +35,19 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
 
   let activeQuestion: PublicPollView["activeQuestion"] = null;
   let closedQuestion: PublicPollView["closedQuestion"] = null;
+  let slide: PublicPollView["slide"] = null;
 
   if (poll.activeQuestionId && poll.status === "active") {
-    const [question] = await db
-      .select({
-        id: questions.id,
-        text: questions.text,
-        status: questions.status,
-        correctOptionId: questions.correctOptionId,
-        ...questionMediaColumns,
-      })
-      .from(questions)
-      .where(and(eq(questions.id, poll.activeQuestionId), eq(questions.pollId, poll.id)))
-      .limit(1);
+    let question: Awaited<ReturnType<typeof selectQuestion>>[number] | undefined = (await selectQuestion(poll.id, poll.activeQuestionId))[0];
+
+    // Promítá se slajd, který není otázkou: účastníkům jen jeho typ (obsah
+    // slajdu se na mobily neposílá). U výsledků otázky navíc vyhodnocení
+    // té otázky — ale jen když už je uzavřená (správná odpověď nikdy dřív).
+    if (question && question.kind !== "question") {
+      slide = { kind: question.kind as NonNullable<PublicPollView["slide"]>["kind"] };
+      question = question.kind === "results" && question.resultsQuestionId ? (await selectQuestion(poll.id, question.resultsQuestionId))[0] : undefined;
+      if (question?.status !== "ended" || question.kind !== "question") question = undefined;
+    }
 
     const questionOptions = question
       ? await db
@@ -60,7 +60,6 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
     // Správná odpověď (correctOptionId) se do `activeQuestion` nikdy
     // nedostane — ani po znovuotevření otázky. Jen do `closedQuestion`.
     if (question?.status === "active") {
-
       const link = toQuestionLink(question);
       activeQuestion = {
         id: question.id,
@@ -88,5 +87,22 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
     mode: poll.mode as PublicPollView["mode"],
     activeQuestion,
     closedQuestion,
+    slide,
   };
+}
+
+function selectQuestion(pollId: number, questionId: number) {
+  return getDb()
+    .select({
+      id: questions.id,
+      text: questions.text,
+      status: questions.status,
+      kind: questions.kind,
+      resultsQuestionId: questions.resultsQuestionId,
+      correctOptionId: questions.correctOptionId,
+      ...questionMediaColumns,
+    })
+    .from(questions)
+    .where(and(eq(questions.id, questionId), eq(questions.pollId, pollId)))
+    .limit(1);
 }

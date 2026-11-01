@@ -82,6 +82,19 @@ export const questions = pgTable(
     // anketa. Záměrně bez .references() (kruh questions <-> options, viz
     // polls.activeQuestionId). Účastníkům se ukazuje až po ukončení otázky.
     correctOptionId: integer("correct_option_id"),
+    // Typ slajdu prezentace: "question" (výchozí, všechna historická data),
+    // "content" (nadpis = text, odstavce = body, volitelný obrázek),
+    // "results" (výsledky otázky results_question_id) a "leaderboard"
+    // (pořadí účastníků, vlastní nadpis = text). Slajdy, které nejsou
+    // otázkou, nemají odpovědi ani hlasy a zůstávají ve stavu "prepared",
+    // takže je souhrny, e-mail a CSV (filtrují status != prepared) vynechají.
+    kind: varchar("kind", { length: 20 }).notNull().default("question"),
+    body: varchar("body", { length: 2000 }),
+    // Záměrně bez .references() (smazání otázky nesmí smazat slajd; editor
+    // chybějící vazbu označí). Jen otázka téhož hlasování.
+    resultsQuestionId: integer("results_question_id"),
+    // Body za správnou odpověď (jen otázka se správnou odpovědí).
+    points: integer("points").notNull().default(1),
   },
   (table) => [index("questions_poll_id_idx").on(table.pollId)]
 );

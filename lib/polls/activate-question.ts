@@ -40,7 +40,9 @@ export async function activateQuestion(moderatorToken: string, questionId: numbe
     const [question] = await tx
       .select({ id: questions.id })
       .from(questions)
-      .where(and(eq(questions.id, questionId), eq(questions.pollId, poll.id)))
+      // Slajdy, které nejsou otázkou (obsah, výsledky, žebříček), se nespouštějí —
+      // promítají se navigací (navigate-slide.ts) a zůstávají „prepared“.
+      .where(and(eq(questions.id, questionId), eq(questions.pollId, poll.id), eq(questions.kind, "question")))
       .limit(1);
 
     if (!question) return { ok: false, reason: "question_not_found" };

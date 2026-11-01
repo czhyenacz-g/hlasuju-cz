@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePolling } from "../../../lib/use-polling.ts";
 import QrCode from "../../../components/QrCode.tsx";
 import QuestionImage from "../../../components/QuestionImage.tsx";
 import QuestionLink from "../../../components/QuestionLink.tsx";
+import SlideBody from "../../../components/SlideBody.tsx";
 import AlphegaAffiliateBanner from "../../../components/AlphegaAffiliateBanner.tsx";
 import PresentationView from "./PresentationView.tsx";
 import ModeratorFinalSummary from "./ModeratorFinalSummary.tsx";
 import SelfServiceConsole from "./SelfServiceConsole.tsx";
 import { PrimaryQuestionAction, QuestionStatusBadge, type ModeratorAction } from "./QuestionControls.tsx";
+import { SLIDE_KIND_BADGE, SLIDE_KIND_ICON, SLIDE_KIND_LABEL, slideTitle } from "../../../lib/polls/slide-labels.ts";
 import type { ModeratorPollView } from "../../../lib/polls/types.ts";
 
 const LETTERS = "ABCDEFGHIJ";
@@ -24,20 +27,61 @@ const ACTION_URL: Record<ModeratorAction, string> = {
 /** Kterou otázku ukázat po (re)loadu: běžící/vyhodnocovanou, jinak první nespuštěnou. */
 function initialCursor(poll: ModeratorPollView): number | null {
   if (poll.activeQuestionId && poll.questions.some((q) => q.id === poll.activeQuestionId)) return poll.activeQuestionId;
-  return (poll.questions.find((q) => q.status === "prepared") ?? poll.questions[0])?.id ?? null;
+  return (poll.questions.find((q) => q.kind === "question" && q.status === "prepared") ?? poll.questions[0])?.id ?? null;
 }
 
-// Kurzor (vybraná otázka) je lokální stav moderátora — mění to, co
-// moderátor vidí a co "Spustit otázku" spustí, NIKDY samo o sobě to, co
-// vidí účastníci (to mění jen akce na serveru). Kurzor je podle ID
-// otázky, ne indexu, aby přežil editaci/přeřazení otázek.
+// Promítání přežije obnovení stránky (stav běhu je na serveru, tady jen
+// to, jestli byl prezentující v promítacím režimu).
+function presentingKey(moderatorToken: string) {
+  return `hlasuju_presenting_${moderatorToken.slice(0, 16)}`;
+}
+
+function readPresenting(moderatorToken: string): boolean {
+  try {
+    return window.sessionStorage.getItem(presentingKey(moderatorToken)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function storePresenting(moderatorToken: string, value: boolean) {
+  try {
+    if (value) window.sessionStorage.setItem(presentingKey(moderatorToken), "1");
+    else window.sessionStorage.removeItem(presentingKey(moderatorToken));
+  } catch {
+    // Bez sessionStorage se po reloadu jen ukáže řídicí konzole.
+  }
+}
+
+// Kurzor (vybraný slajd) je lokální stav moderátora v řídicí konzoli —
+// mění to, co moderátor vidí a co "Spustit otázku" spustí, NIKDY samo o
+// sobě to, co vidí účastníci. V promítání je naopak zdrojem pravdy server
+// (active_question_id): „Další“/„Zpět“ přepínají slajd pro všechny
+// (lib/polls/navigate-slide.ts). Kurzor je podle ID, ne indexu, aby
+// přežil editaci/přeřazení.
 export default function ModeratorConsole({ moderatorToken }: { moderatorToken: string }) {
+  const router = useRouter();
   const [cursorId, setCursorId] = useState<number | null>(null);
   const [showQr, setShowQr] = useState(false);
-  const [presenting, setPresenting] = useState(false);
+  const [presenting, setPresentingState] = useState(false);
   const [copyLabel, setCopyLabel] = useState("Kopírovat odkaz");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState(false);
+  // Cílový slajd, než ho potvrdí server (okamžitá odezva „Další“).
+  const [optimisticSlideId, setOptimisticSlideId] = useState<number | null>(null);
+  const navigatingRef = useRef(false);
+
+  useEffect(() => {
+    setPresentingState(readPresenting(moderatorToken));
+  }, [moderatorToken]);
+
+  const setPresenting = useCallback(
+    (value: boolean) => {
+      setPresentingState(value);
+      storePresenting(moderatorToken, value);
+    },
+    [moderatorToken]
+  );
 
   const fetcher = useCallback(
     async (signal: AbortSignal) => {
@@ -59,6 +103,11 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
     if (!poll) return;
     if (cursorId === null || !poll.questions.some((q) => q.id === cursorId)) setCursorId(initialCursor(poll));
   }, [poll, cursorId]);
+
+  // Server potvrdil přechod → optimistický cíl už není potřeba.
+  useEffect(() => {
+    if (poll && optimisticSlideId !== null && poll.activeQuestionId === optimisticSlideId) setOptimisticSlideId(null);
+  }, [poll, optimisticSlideId]);
 
   const runAction = useCallback(
     async (action: ModeratorAction, questionId?: number) => {
@@ -84,6 +133,77 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
     [moderatorToken, refresh]
   );
 
+  const pollRef = useRef(poll);
+  pollRef.current = poll;
+
+  /** Přechod na slajd pro všechny (uzavře/otevře odpovídání na serveru). */
+  const navigateTo = useCallback(
+    async (toSlideId: number) => {
+      const current = pollRef.current;
+      // Dvojklik / držená klávesa: další přechod až po dokončení předchozího.
+      if (!current || navigatingRef.current) return;
+      navigatingRef.current = true;
+      setActionError(null);
+      setActionPending(true);
+      setOptimisticSlideId(toSlideId);
+      setCursorId(toSlideId);
+      try {
+        const response = await fetch(`/api/polls/moderator/${moderatorToken}/navigate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fromSlideId: current.activeQuestionId, toSlideId }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          setOptimisticSlideId(null);
+          setActionError(body.error ?? "Přechod se nezdařil.");
+        }
+      } catch {
+        setOptimisticSlideId(null);
+        setActionError("Přechod se nezdařil. Zkontrolujte připojení a zkuste to znovu.");
+      } finally {
+        navigatingRef.current = false;
+        setActionPending(false);
+        refresh();
+      }
+    },
+    [moderatorToken, refresh]
+  );
+
+  const closePresentation = useCallback(() => setPresenting(false), [setPresenting]);
+
+  /** Spustí promítání; když se zatím nic nepromítá, zobrazí první (nebo vybraný) slajd. */
+  function startPresenting(fromSlideId?: number) {
+    if (!poll) return;
+    setPresenting(true);
+    const activeExists = poll.activeQuestionId !== null && poll.questions.some((q) => q.id === poll.activeQuestionId);
+    const target = fromSlideId ?? (activeExists ? null : poll.questions[0]?.id);
+    if (target && target !== poll.activeQuestionId) void navigateTo(target);
+  }
+
+  const [duplicating, setDuplicating] = useState(false);
+  async function startNewRun() {
+    if (
+      !window.confirm(
+        "Vytvořit nové promítání stejné prezentace pro jiné publikum?\n\nVznikne nový kód pro účastníky a nový odkaz na řízení. Odpovědi a body začnou od nuly; toto promítání zůstane beze změny i s výsledky."
+      )
+    ) {
+      return;
+    }
+    setDuplicating(true);
+    setActionError(null);
+    try {
+      const response = await fetch(`/api/polls/moderator/${moderatorToken}/duplicate`, { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? "Nové promítání se nepodařilo vytvořit.");
+      storePresenting(moderatorToken, false);
+      router.push(`/m/${body.moderatorToken}`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Nové promítání se nepodařilo vytvořit.");
+      setDuplicating(false);
+    }
+  }
+
   if (data?.notFound) {
     return <StateScreen title="Hlasování nenalezeno" message="Odkaz je neplatný, nebo hlasování vypršelo." />;
   }
@@ -99,6 +219,7 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
   const publicUrl = typeof window !== "undefined" ? `${window.location.origin}/${poll.publicCode}` : `/${poll.publicCode}`;
   const cursorIndex = Math.max(0, poll.questions.findIndex((q) => q.id === cursorId));
   const question = poll.questions[cursorIndex] ?? null;
+  const questionSlides = poll.questions.filter((q) => q.kind === "question");
 
   async function copyLink() {
     try {
@@ -119,12 +240,13 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
           "Ukončit celé hlasování? Účastníci uvidí finální výsledky. Tuto akci nelze vrátit — hlasovat ani upravovat otázky už pak nepůjde."
       )
     ) {
+      setPresenting(false);
       void runAction("end");
     }
   }
 
   // Po poslední otázce (nebo když už nic nečeká na spuštění) nabídnout výrazné ukončení.
-  const nothingLeft = poll.questions.length > 0 && poll.questions.every((q) => q.status !== "prepared");
+  const nothingLeft = questionSlides.length > 0 && questionSlides.every((q) => q.status !== "prepared");
   const onLastQuestion = cursorIndex === poll.questions.length - 1 && question?.status !== "prepared";
 
   if (poll.pollStatus === "closed") {
@@ -135,6 +257,9 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         onEmailSent={refresh}
         onCopyLink={copyLink}
         copyLabel={copyLabel === "Kopírovat odkaz" ? "Kopírovat odkaz na výsledky" : copyLabel}
+        onNewRun={startNewRun}
+        newRunPending={duplicating}
+        newRunError={actionError}
       />
     );
   }
@@ -143,18 +268,24 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
     return <SelfServiceConsole poll={poll} moderatorToken={moderatorToken} pending={actionPending} error={actionError} onEnd={() => void runAction("end")} />;
   }
 
-  if (presenting && question) {
+  // Promítá se to, co je aktivní na serveru (po přechodu hned cílový slajd).
+  const shownId = optimisticSlideId ?? poll.activeQuestionId;
+  const shownIndex = poll.questions.findIndex((q) => q.id === shownId);
+  const presentedIndex = shownIndex === -1 ? 0 : shownIndex;
+  const presented = poll.questions[presentedIndex];
+
+  if (presenting && presented) {
     return (
       <PresentationView
         poll={poll}
-        question={question}
-        questionIndex={cursorIndex}
+        slide={presented}
+        slideIndex={presentedIndex}
         publicUrl={publicUrl}
         pending={actionPending}
         error={actionError}
-        onSelect={(id) => setCursorId(id)}
+        onNavigate={navigateTo}
         onAction={runAction}
-        onClose={() => setPresenting(false)}
+        onClose={closePresentation}
       />
     );
   }
@@ -168,11 +299,11 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
             href={`/m/${moderatorToken}/upravit`}
             className="rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:border-brand hover:text-brand"
           >
-            ✎ Upravit otázky
+            ✎ Upravit prezentaci
           </Link>
           <button
             type="button"
-            onClick={() => setPresenting(true)}
+            onClick={() => startPresenting()}
             disabled={!question}
             className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
           >
@@ -213,16 +344,21 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
       {question && (
         <section
           className={`mt-6 rounded-3xl border bg-white p-6 shadow-soft ${
-            question.status === "active" ? "border-brand ring-4 ring-brand/15" : "border-gray-200"
+            question.status === "active" || question.id === poll.activeQuestionId ? "border-brand ring-4 ring-brand/15" : "border-gray-200"
           }`}
         >
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium text-gray-500">
-              Otázka {cursorIndex + 1} z {poll.questions.length}
+              Slajd {cursorIndex + 1} z {poll.questions.length}
             </p>
-            <QuestionStatusBadge question={question} isCurrent={question.id === poll.activeQuestionId} />
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${SLIDE_KIND_BADGE[question.kind]}`}>{SLIDE_KIND_LABEL[question.kind]}</span>
+            {question.kind === "question" ? (
+              <QuestionStatusBadge question={question} isCurrent={question.id === poll.activeQuestionId} />
+            ) : (
+              question.id === poll.activeQuestionId && <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">● Promítá se</span>
+            )}
           </div>
-          <h2 className="mt-2 text-xl font-bold text-gray-900">{question.text}</h2>
+          <h2 className="mt-2 text-xl font-bold text-gray-900">{slideTitle(question, poll.questions)}</h2>
 
           {question.image && (
             <div className="mt-4">
@@ -230,19 +366,30 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
             </div>
           )}
 
-          <ul className="mt-4 flex flex-col gap-1.5 text-gray-800">
-            {question.options.map((option, index) => (
-              <li key={option.id} className="flex items-baseline gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-md bg-brand-light text-sm font-bold text-brand-dark">{LETTERS[index]}</span>
-                <span className="flex-1">
-                  {option.text}
-                  {/* Jen pro moderátora — účastníci a plátno ji uvidí až po ukončení otázky. */}
-                  {option.id === question.correctOptionId && <span className="ml-2 text-sm font-semibold text-emerald-700">✓ správná</span>}
-                </span>
-                {question.status !== "prepared" && <span className="text-sm text-gray-500">{option.votes}</span>}
-              </li>
-            ))}
-          </ul>
+          {question.kind === "content" && question.body && <SlideBody text={question.body} className="mt-3 text-gray-700" />}
+          {question.kind === "leaderboard" && question.leaderboard && (
+            <p className="mt-2 text-sm text-gray-600">
+              {question.leaderboard.scoredQuestionsTotal === 0
+                ? "Před tímto slajdem není žádná bodovaná otázka."
+                : `Uzavřené bodované otázky: ${question.leaderboard.scoredQuestions} z ${question.leaderboard.scoredQuestionsTotal} · účastníků: ${question.leaderboard.entries.length}`}
+            </p>
+          )}
+
+          {question.kind === "question" && (
+            <ul className="mt-4 flex flex-col gap-1.5 text-gray-800">
+              {question.options.map((option, index) => (
+                <li key={option.id} className="flex items-baseline gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-md bg-brand-light text-sm font-bold text-brand-dark">{LETTERS[index]}</span>
+                  <span className="flex-1">
+                    {option.text}
+                    {/* Jen pro moderátora — účastníci a plátno ji uvidí až po ukončení otázky. */}
+                    {option.id === question.correctOptionId && <span className="ml-2 text-sm font-semibold text-emerald-700">✓ správná</span>}
+                  </span>
+                  {question.status !== "prepared" && <span className="text-sm text-gray-500">{option.votes}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
 
           {question.link && (
             <div className="mt-4">
@@ -262,7 +409,7 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
             >
               ← Předchozí
             </button>
-            <PrimaryQuestionAction question={question} pending={actionPending} onAction={runAction} />
+            {question.kind === "question" && <PrimaryQuestionAction question={question} pending={actionPending} onAction={runAction} />}
             <button
               type="button"
               onClick={() => setCursorId(poll.questions[cursorIndex + 1]?.id ?? question.id)}
@@ -273,10 +420,11 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
             </button>
             <button
               type="button"
-              onClick={() => setPresenting(true)}
+              onClick={() => startPresenting(question.id)}
               className="rounded-xl border-2 border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:border-brand hover:text-brand"
+              title="Promítne tento slajd účastníkům i na plátno (otázka se otevře)"
             >
-              Promítnout otázku a výsledky
+              Promítat od tohoto slajdu
             </button>
           </div>
 
@@ -285,7 +433,7 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
       )}
 
       <section className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-soft sm:p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Všechny otázky</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Všechny slajdy</h2>
         <ol className="mt-3 flex flex-col gap-1">
           {poll.questions.map((q, index) => (
             <li key={q.id}>
@@ -297,9 +445,20 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
                 }`}
               >
                 <span className="w-6 shrink-0 text-gray-400">{index + 1}.</span>
-                <span className="min-w-0 flex-1 truncate">{q.text}</span>
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold ${SLIDE_KIND_BADGE[q.kind]}`}
+                  title={SLIDE_KIND_LABEL[q.kind]}
+                  aria-label={SLIDE_KIND_LABEL[q.kind]}
+                >
+                  {SLIDE_KIND_ICON[q.kind]}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{slideTitle(q, poll.questions)}</span>
                 {q.image && <span title="Má obrázek">🖼</span>}
-                <QuestionStatusBadge question={q} isCurrent={q.id === poll.activeQuestionId} compact />
+                {q.kind === "question" ? (
+                  <QuestionStatusBadge question={q} isCurrent={q.id === poll.activeQuestionId} compact />
+                ) : (
+                  q.id === poll.activeQuestionId && <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">● Promítá se</span>
+                )}
               </button>
             </li>
           ))}
@@ -322,6 +481,12 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
           </button>
         </div>
       )}
+
+      <div className="mt-4 flex justify-end">
+        <button type="button" onClick={startNewRun} disabled={duplicating} className="text-sm font-semibold text-gray-600 hover:text-brand hover:underline disabled:opacity-60">
+          {duplicating ? "Vytvářím…" : "Nové promítání pro jiné publikum…"}
+        </button>
+      </div>
 
       {/* compact, vždy pod řízením hlasování — moderátor tuhle obrazovku
           typicky sdílí na projektoru, banner nesmí být sticky/nápadný. */}

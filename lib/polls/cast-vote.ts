@@ -56,10 +56,10 @@ export async function castVote(
   if (poll.activeQuestionId !== questionId) return { ok: false, reason: "question_not_active" };
 
   const [option] = await db
-    .select({ id: options.id, questionStatus: questions.status })
+    .select({ id: options.id })
     .from(options)
     .innerJoin(questions, eq(options.questionId, questions.id))
-    .where(and(eq(options.id, optionId), eq(options.questionId, questionId), eq(questions.pollId, poll.id)))
+    .where(and(eq(options.id, optionId), eq(options.questionId, questionId), eq(questions.pollId, poll.id), eq(questions.kind, "question")))
     .limit(1);
 
   if (!option) return { ok: false, reason: "option_not_found" };
@@ -73,16 +73,32 @@ export async function castVote(
       .limit(1);
     if (!registered) return { ok: false, reason: "name_required" };
   }
-  if (option.questionStatus !== "active") return { ok: false, reason: "question_not_active" };
 
+  // Rozhodující je stav otázky v okamžiku zápisu, ne při čtení výš: zápis
+  // hlasu drží sdílený zámek řádku otázky (FOR SHARE), takže uzavření
+  // otázky (navigace „Další“, „Ukončit otázku“) na něj počká, nebo naopak
+  // hlas uvidí už uzavřenou otázku a odmítne se. Opožděná odpověď po
+  // uzavření se tak nikdy nezapíše. U veřejné ankety (stav otázky se
+  // nemění, editor tam zamyká odpovědi) stačí obyčejná kontrola.
   try {
-    await db.insert(votes).values({ questionId, optionId, participantId });
+    const accepted = await db.transaction(async (tx) => {
+      const statusQuery = tx
+        .select({ id: questions.id })
+        .from(questions)
+        .where(and(eq(questions.id, questionId), eq(questions.status, "active")))
+        .limit(1);
+      const [open] = poll.mode === "live" ? await statusQuery.for("share") : await statusQuery;
+      if (!open) return false;
+      // Už hlasoval(a) u téhle otázky — bereme jako úspěch (idempotentní).
+      await tx.insert(votes).values({ questionId, optionId, participantId }).onConflictDoNothing({ target: [votes.questionId, votes.participantId] });
+      return true;
+    });
+    if (!accepted) return { ok: false, reason: "question_not_active" };
   } catch (error) {
     const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: string }).code : undefined;
     // 23503: odpověď mezitím odstranila editace veřejné ankety (před prvním hlasem).
     if (code === "23503") return { ok: false, reason: "option_not_found" };
-    if (code !== "23505") throw error;
-    // Už hlasoval(a) u týhle otázky — bereme jako úspěch (idempotentní).
+    throw error;
   }
 
   // Veřejná anketa žije, dokud se hlasuje: platnost 30 dní od posledního

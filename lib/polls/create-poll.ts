@@ -45,11 +45,15 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
 
         questionIds.length = 0;
         for (const [index, question] of input.questions.entries()) {
+          const kind = question.kind ?? "question";
           const [insertedQuestion] = await tx
             .insert(questions)
             .values({
               pollId: poll.id,
+              kind,
               text: question.text,
+              body: question.body ?? null,
+              points: question.points ?? 1,
               position: index,
               // Veřejná anketa přijímá hlasy hned po vytvoření.
               status: input.mode === "self_service" ? "active" : "prepared",
@@ -59,6 +63,7 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
             })
             .returning({ id: questions.id });
           questionIds.push(insertedQuestion.id);
+          if (question.options.length === 0) continue;
 
           const insertedOptions = await tx
             .insert(options)
@@ -74,6 +79,14 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
           const correct = insertedOptions.find((option) => option.position === question.correctOptionIndex);
           if (correct) {
             await tx.update(questions).set({ correctOptionId: correct.id }).where(eq(questions.id, insertedQuestion.id));
+          }
+        }
+        // Výsledkové slajdy: index otázky → její nové ID (validace ověřila,
+        // že index míří na dřívější otázku v témže seznamu).
+        for (const [index, question] of input.questions.entries()) {
+          const target = question.resultsQuestionIndex;
+          if (question.kind === "results" && target !== undefined && target !== null) {
+            await tx.update(questions).set({ resultsQuestionId: questionIds[target] }).where(eq(questions.id, questionIds[index]));
           }
         }
         if (input.mode === "self_service") {

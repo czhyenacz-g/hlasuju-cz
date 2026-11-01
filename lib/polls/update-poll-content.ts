@@ -4,7 +4,7 @@ import { getDb } from "../../db/index.ts";
 import { options, pollImages, polls, questions, votes } from "../../db/schema.ts";
 import { deleteUnusedPollImagesQuietly } from "../images/poll-images.ts";
 import { questionMediaColumns } from "./question-media.ts";
-import type { QuestionStatus, UpdatePollInput, UpdatePollQuestionInput } from "./types.ts";
+import type { QuestionStatus, SlideKind, UpdatePollInput, UpdatePollQuestionInput } from "./types.ts";
 
 export type UpdatePollContentResult =
   | { ok: true; version: number }
@@ -14,7 +14,10 @@ export type UpdatePollContentResult =
 
 type ExistingQuestion = {
   id: number;
+  kind: SlideKind;
   text: string;
+  body: string | null;
+  points: number;
   status: QuestionStatus;
   imageUrl: string | null;
   imageAlt: string | null;
@@ -52,13 +55,18 @@ function sameLockedContent(existing: ExistingQuestion, input: UpdatePollQuestion
       ? (existing.linkLabel ?? null) === (link?.label ?? null) && existing.linkShowDuringVoting === (link?.showDuringVoting ?? false)
       : true) &&
     // Správná odpověď spuštěné otázky je zamčená stejně jako odpovědi.
-    existing.correctOptionId === (input.correctOptionIndex === null ? null : (input.options[input.correctOptionIndex]?.id ?? null))
+    existing.correctOptionId === (input.correctOptionIndex === null ? null : (input.options[input.correctOptionIndex]?.id ?? null)) &&
+    // Body už odehrané otázky by zpětně změnily žebříček.
+    (existing.correctOptionId === null || existing.points === (input.points ?? 1))
   );
 }
 
 function questionColumns(input: UpdatePollQuestionInput, position: number) {
   return {
+    kind: input.kind ?? "question",
     text: input.text,
+    body: input.body ?? null,
+    points: input.points ?? 1,
     position,
     imageUrl: input.image?.url ?? null,
     imageWidth: input.image?.width ?? null,
@@ -92,7 +100,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
 
   const result = await db.transaction(async (tx): Promise<UpdatePollContentResult> => {
     const [poll] = await tx
-      .select({ id: polls.id, status: polls.status, version: polls.version, mode: polls.mode })
+      .select({ id: polls.id, status: polls.status, version: polls.version, mode: polls.mode, activeQuestionId: polls.activeQuestionId })
       .from(polls)
       .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
       .limit(1)
@@ -108,6 +116,9 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         text: questions.text,
         status: questions.status,
         correctOptionId: questions.correctOptionId,
+        kind: questions.kind,
+        body: questions.body,
+        points: questions.points,
         ...questionMediaColumns,
       })
       .from(questions)
@@ -143,7 +154,10 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
     for (const row of questionRows) {
       existing.set(row.id, {
         id: row.id,
+        kind: row.kind as SlideKind,
         text: row.text,
+        body: row.body,
+        points: row.points,
         status: row.status as QuestionStatus,
         imageUrl: row.imageUrl,
         imageAlt: row.imageAlt,
@@ -163,7 +177,9 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
 
     // Obrázky nahrané do tohoto hlasování (evidence poll_images). K otázce
     // jde uložit jen URL odsud — ne cizí URL (sledovací pixel apod.) ani
-    // obrázek jiného hlasování.
+    // obrázek jiného hlasování. Navíc obrázky, které už hlasování používá
+    // (kopie prezentace pro nový běh sdílí obrázky originálu, viz
+    // duplicate-poll.ts) — i pro duplikovaný slajd.
     const ownImages = new Map(
       (
         await tx
@@ -172,6 +188,11 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
           .where(and(eq(pollImages.pollId, poll.id), isNull(pollImages.deletedAt)))
       ).map((row) => [row.url, row])
     );
+    for (const row of questionRows) {
+      if (row.imageUrl && row.imageWidth && row.imageHeight && !ownImages.has(row.imageUrl)) {
+        ownImages.set(row.imageUrl, { url: row.imageUrl, width: row.imageWidth, height: row.imageHeight });
+      }
+    }
 
     const invalid = (message: string): UpdatePollContentResult => ({ ok: false, reason: "invalid_change", message });
     const locked = (question: ExistingQuestion) => isQuestionLocked(question, poll.mode);
@@ -189,6 +210,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
       if (question.id !== undefined) {
         if (!current || seen.has(question.id)) return invalid(`${label}: otázka už neexistuje. Načtěte stránku znovu.`);
         seen.add(question.id);
+        if (current.kind !== (question.kind ?? "question")) return invalid(`${label}: typ slajdu nelze změnit. Načtěte stránku znovu.`);
 
         if (locked(current)) {
           if (!sameLockedContent(current, question)) {
@@ -234,11 +256,14 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
       );
     }
 
+    // ID slajdů podle pořadí v požadavku — pro vazby výsledkových slajdů.
+    const idsByIndex: number[] = [];
     for (const [position, question] of input.questions.entries()) {
       const current = question.id === undefined ? undefined : existing.get(question.id);
 
       if (current && locked(current)) {
         await tx.update(questions).set({ position }).where(eq(questions.id, current.id));
+        idsByIndex.push(current.id);
         continue;
       }
 
@@ -266,6 +291,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
           .update(questions)
           .set({ ...questionColumns(question, position), correctOptionId })
           .where(eq(questions.id, current.id));
+        idsByIndex.push(current.id);
         continue;
       }
 
@@ -273,6 +299,8 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         .insert(questions)
         .values({ pollId: poll.id, status: "prepared", ...questionColumns(question, position) })
         .returning({ id: questions.id });
+      idsByIndex.push(inserted.id);
+      if (question.options.length === 0) continue;
       const insertedOptions = await tx
         .insert(options)
         .values(question.options.map((option, optionPosition) => ({ questionId: inserted.id, text: option.text, position: optionPosition })))
@@ -281,8 +309,24 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
       if (correct) await tx.update(questions).set({ correctOptionId: correct.id }).where(eq(questions.id, inserted.id));
     }
 
+    // Vazby výsledkových slajdů (index → ID). Bez vazby = NULL, editor ji
+    // označí jako chybějící; nikdy se tiše nepřesměruje na jinou otázku.
+    for (const [index, question] of input.questions.entries()) {
+      if ((question.kind ?? "question") !== "results") continue;
+      const target = question.resultsQuestionIndex;
+      await tx
+        .update(questions)
+        .set({ resultsQuestionId: target === undefined || target === null ? null : idsByIndex[target] })
+        .where(eq(questions.id, idsByIndex[index]));
+    }
+
     const nextVersion = poll.version + 1;
-    await tx.update(polls).set({ title: input.title ?? null, version: nextVersion }).where(eq(polls.id, poll.id));
+    // Smazaný promítaný slajd: účastníci se vrátí do čekání.
+    const activeRemoved = poll.activeQuestionId !== null && removedQuestions.some((question) => question.id === poll.activeQuestionId);
+    await tx
+      .update(polls)
+      .set({ title: input.title ?? null, version: nextVersion, ...(activeRemoved ? { activeQuestionId: null } : {}) })
+      .where(eq(polls.id, poll.id));
 
     // Obrázky, na které po uložení už nic neodkazuje (odstraněná otázka,
     // nahrazený/odebraný obrázek). Množinový rozdíl přes celý poll — stejný

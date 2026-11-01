@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { LIMITS } from "../../lib/polls/limits.ts";
-import type { PollMode } from "../../lib/polls/types.ts";
+import type { PollMode, SlideKind } from "../../lib/polls/types.ts";
+import { SLIDE_KIND_BADGE, SLIDE_KIND_ICON, SLIDE_KIND_LABEL } from "../../lib/polls/slide-labels.ts";
 import { normalizeLinkUrl } from "../../lib/polls/validate.ts";
 import { IMAGE_ACCEPT_ATTRIBUTE, prepareImage } from "../../lib/images/prepare-image.ts";
 import type { EditorContent, EditorQuestion, QuestionImage } from "../../lib/polls/types.ts";
@@ -16,6 +17,14 @@ type ImageDraft =
 type QuestionDraft = {
   key: string;
   id?: number;
+  // Typ slajdu prezentace (otázka / obsah / výsledky otázky / žebříček).
+  kind: SlideKind;
+  // Obsahový slajd: text pod nadpisem (`text` = nadpis).
+  body: string;
+  // Výsledkový slajd: klíč otázky (draftu), jejíž výsledky ukazuje.
+  resultsKey: string | null;
+  // Body za správnou odpověď (jen otázka se správnou odpovědí).
+  points: number;
   // Zamčená otázka (spuštěná / s hlasy) — v UI jen pro čtení, při
   // uložení se posílá přesně původní obsah (`original`).
   locked: boolean;
@@ -52,13 +61,17 @@ function emptyOption(): OptionDraft {
   return { key: makeKey(), text: "" };
 }
 
-function emptyQuestion(expanded = true): QuestionDraft {
+function emptyQuestion(expanded = true, kind: SlideKind = "question"): QuestionDraft {
   return {
     key: makeKey(),
+    kind,
+    body: "",
+    resultsKey: null,
+    points: 1,
     locked: false,
     text: "",
     expanded,
-    options: [emptyOption(), emptyOption()],
+    options: kind === "question" ? [emptyOption(), emptyOption()] : [],
     correctKey: null,
     image: null,
     imageAlt: "",
@@ -82,6 +95,10 @@ function draftFromQuestion(question: EditorQuestion): QuestionDraft {
   return {
     key: `q${question.id}`,
     id: question.id,
+    kind: question.kind,
+    body: question.body ?? "",
+    resultsKey: question.resultsQuestionId ? `q${question.resultsQuestionId}` : null,
+    points: question.points,
     locked: question.locked,
     original: question,
     text: question.text,
@@ -100,6 +117,22 @@ function draftFromQuestion(question: EditorQuestion): QuestionDraft {
 const LETTERS = "ABCDEFGHIJ";
 
 const UPLOAD_ATTEMPTS = 4;
+
+const ADD_SLIDE: { kind: SlideKind; label: string; hint: string }[] = [
+  { kind: "question", label: "+ Otázka", hint: "Účastníci odpovídají z mobilů" },
+  { kind: "content", label: "+ Obsah", hint: "Nadpis, text, obrázek" },
+  { kind: "results", label: "+ Výsledky otázky", hint: "Graf odpovědí na plátně" },
+  { kind: "leaderboard", label: "+ Žebříček", hint: "Pořadí podle bodů" },
+];
+
+/** Problém vazby výsledkového slajdu (null = v pořádku). */
+function resultsLinkProblem(slide: QuestionDraft, all: QuestionDraft[]): string | null {
+  if (!slide.resultsKey) return "vyberte otázku, jejíž výsledky se mají zobrazit.";
+  const targetIndex = all.findIndex((q) => q.key === slide.resultsKey);
+  if (targetIndex === -1 || all[targetIndex].kind !== "question") return "otázka k výsledkům byla odstraněna — vyberte jinou.";
+  if (targetIndex > all.indexOf(slide)) return "otázka k výsledkům je až za tímto slajdem — přesuňte slajd nebo vyberte jinou otázku.";
+  return null;
+}
 
 async function uploadImage(
   moderatorToken: string,
@@ -123,12 +156,19 @@ async function uploadImage(
   }
 }
 
+/** Index výsledkového slajdu → otázka podle klíče (null = chybějící vazba). */
+function resultsIndex(question: QuestionDraft, all: QuestionDraft[]): number | null {
+  if (question.kind !== "results" || !question.resultsKey) return null;
+  const index = all.findIndex((other) => other.key === question.resultsKey);
+  return index === -1 ? null : index;
+}
+
 /** Návrh otázky → vstup pro PUT /content (zamčené otázky beze změny). */
-function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url: string; width: number; height: number }>) {
+function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url: string; width: number; height: number }>, all: QuestionDraft[]) {
   if (question.locked && question.original) {
-    const { id, text, options, image, link, correctOptionId } = question.original;
+    const { id, kind, text, options, image, link, correctOptionId, points } = question.original;
     const correctIndex = options.findIndex((option) => option.id === correctOptionId);
-    return { id, text, options, image, link, correctOptionIndex: correctIndex === -1 ? null : correctIndex };
+    return { id, kind, text, options, image, link, correctOptionIndex: correctIndex === -1 ? null : correctIndex, points, body: null, resultsQuestionIndex: null };
   }
 
   let image: QuestionImage | null = null;
@@ -140,9 +180,25 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
     if (stored) image = { ...stored, alt };
   }
 
+  if (question.kind !== "question") {
+    return {
+      ...(question.id ? { id: question.id } : {}),
+      kind: question.kind,
+      text: question.text.trim(),
+      options: [] as { id?: number; text: string }[],
+      image: question.kind === "content" ? image : null,
+      link: null,
+      correctOptionIndex: null,
+      body: question.kind === "content" ? question.body.trim() || null : null,
+      resultsQuestionIndex: resultsIndex(question, all),
+      points: 1,
+    };
+  }
+
   const correctIndex = question.options.findIndex((option) => option.key === question.correctKey);
   return {
     ...(question.id ? { id: question.id } : {}),
+    kind: question.kind,
     text: question.text.trim(),
     options: question.options.map((option) => ({ ...(option.id ? { id: option.id } : {}), text: option.text.trim() })),
     image,
@@ -150,6 +206,9 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
       ? { url: question.linkUrl.trim(), label: question.linkLabel.trim() || null, showDuringVoting: question.linkShowDuringVoting }
       : null,
     correctOptionIndex: correctIndex === -1 ? null : correctIndex,
+    body: null,
+    resultsQuestionIndex: null,
+    points: question.points,
   };
 }
 
@@ -203,9 +262,30 @@ export default function PollEditor(props: PollEditorProps) {
     setQuestions((prev) => prev.map((q) => (q.key === key ? { ...q, expanded: !q.expanded } : q)));
   }
 
-  function addQuestion() {
-    if (questions.length >= LIMITS.MAX_QUESTIONS) return;
-    change((prev) => [...prev.map((q) => ({ ...q, expanded: false })), emptyQuestion()]);
+  const questionCount = questions.filter((q) => q.kind === "question").length;
+  const canAdd = (kind: SlideKind) => questions.length < LIMITS.MAX_SLIDES && (kind !== "question" || questionCount < LIMITS.MAX_QUESTIONS);
+
+  /** Nový slajd na konec; výsledky si předvyberou nejbližší předchozí otázku. */
+  function addSlide(kind: SlideKind) {
+    if (!canAdd(kind)) return;
+    change((prev) => {
+      const slide = emptyQuestion(true, kind);
+      if (kind === "results") slide.resultsKey = [...prev].reverse().find((q) => q.kind === "question")?.key ?? null;
+      return [...prev.map((q) => ({ ...q, expanded: false })), slide];
+    });
+  }
+
+  /** „Výsledky za tuto otázku“ — slajd hned za otázkou. */
+  function addResultsFor(key: string) {
+    if (!canAdd("results")) return;
+    change((prev) => {
+      const index = prev.findIndex((q) => q.key === key);
+      if (index === -1) return prev;
+      const slide = { ...emptyQuestion(false, "results"), resultsKey: key };
+      const next = [...prev];
+      next.splice(index + 1, 0, slide);
+      return next;
+    });
   }
 
   function removeQuestion(key: string) {
@@ -220,12 +300,17 @@ export default function PollEditor(props: PollEditorProps) {
   function duplicateQuestion(key: string) {
     change((prev) => {
       const index = prev.findIndex((q) => q.key === key);
-      if (index === -1 || prev.length >= LIMITS.MAX_QUESTIONS) return prev;
+      if (index === -1 || prev.length >= LIMITS.MAX_SLIDES) return prev;
       const source = prev[index];
+      if (source.kind === "question" && prev.filter((q) => q.kind === "question").length >= LIMITS.MAX_QUESTIONS) return prev;
       const copiedOptions = source.options.map((o) => ({ key: makeKey(), text: o.text }));
       const copy: QuestionDraft = {
-        ...emptyQuestion(false),
+        ...emptyQuestion(false, source.kind),
         text: source.text,
+        body: source.body,
+        // Kopie výsledků ukazuje tutéž otázku (nikdy ne tiše jinou).
+        resultsKey: source.resultsKey,
+        points: source.points,
         options: copiedOptions,
         correctKey: copiedOptions[source.options.findIndex((o) => o.key === source.correctKey)]?.key ?? null,
         // Uložený obrázek může sdílet i kopie; nenahraný se musí nahrát znovu.
@@ -285,6 +370,16 @@ export default function PollEditor(props: PollEditorProps) {
   function validateDrafts(): string | null {
     for (const [index, q] of questions.entries()) {
       if (q.locked) continue;
+      if (q.kind === "content") {
+        if (!q.text.trim() && !q.body.trim() && !q.image) return `Slajd ${index + 1}: doplňte nadpis, text nebo obrázek.`;
+        continue;
+      }
+      if (q.kind === "results") {
+        const problem = resultsLinkProblem(q, questions);
+        if (problem) return `Slajd ${index + 1}: ${problem}`;
+        continue;
+      }
+      if (q.kind === "leaderboard") continue;
       if (!q.text.trim()) return `Otázka ${index + 1}: doplňte text otázky.`;
       if (q.options.some((o) => !o.text.trim())) return `Otázka ${index + 1}: doplňte text u všech odpovědí.`;
       if (q.linkUrl.trim() && !normalizeLinkUrl(q.linkUrl)) {
@@ -293,6 +388,8 @@ export default function PollEditor(props: PollEditorProps) {
     }
     return null;
   }
+
+  const requireNames = isEdit ? props.initial.requireParticipantName : requireParticipantName;
 
   async function uploadPending(moderatorToken: string) {
     const pending = questions.filter((q) => !q.locked && q.image?.kind === "pending");
@@ -319,7 +416,7 @@ export default function PollEditor(props: PollEditorProps) {
         version: payloadVersion,
         title: title.trim() || undefined,
         questions: questions.map((q) => {
-          const payload = toPayloadQuestion(q, uploaded);
+          const payload = toPayloadQuestion(q, uploaded, questions);
           const createdId = idsByKey?.get(q.key);
           // Po vytvoření mají otázky ID, odpovědi ještě ne (vzniknou znovu).
           return createdId ? { ...payload, id: createdId, options: payload.options.map((o) => ({ text: o.text })) } : payload;
@@ -342,8 +439,17 @@ export default function PollEditor(props: PollEditorProps) {
         mode: selfService ? "self_service" : undefined,
         website: honeypot,
         questions: questions.map((q) => {
-          const payload = toPayloadQuestion(q, new Map());
-          return { text: payload.text, options: payload.options, link: payload.link, correctOptionIndex: payload.correctOptionIndex };
+          const payload = toPayloadQuestion(q, new Map(), questions);
+          return {
+            kind: payload.kind,
+            text: payload.text,
+            options: payload.options,
+            link: payload.link,
+            correctOptionIndex: payload.correctOptionIndex,
+            body: payload.body,
+            resultsQuestionIndex: payload.resultsQuestionIndex,
+            points: payload.points,
+          };
         }),
       }),
     });
@@ -379,8 +485,8 @@ export default function PollEditor(props: PollEditorProps) {
       removedCount > 0 &&
       !window.confirm(
         removedCount === 1
-          ? "Uložením trvale odstraníte 1 otázku. Pokračovat?"
-          : `Uložením trvale odstraníte ${removedCount} otázky. Pokračovat?`
+          ? "Uložením trvale odstraníte 1 slajd. Pokračovat?"
+          : `Uložením trvale odstraníte ${removedCount} slajdy. Pokračovat?`
       )
     ) {
       return;
@@ -503,6 +609,9 @@ export default function PollEditor(props: PollEditorProps) {
             question={q}
             index={index}
             total={questions.length}
+            all={questions}
+            requireNames={requireNames}
+            onAddResults={canAdd("results") ? () => addResultsFor(q.key) : undefined}
             single={selfService}
             imagesEnabled={props.imagesEnabled}
             disabled={saving}
@@ -520,14 +629,30 @@ export default function PollEditor(props: PollEditorProps) {
       </ol>
 
       {!selfService && (
-        <button
-          type="button"
-          onClick={addQuestion}
-          disabled={questions.length >= LIMITS.MAX_QUESTIONS || saving}
-          className="rounded-3xl border-2 border-dashed border-brand/30 bg-white/60 px-5 py-4 text-sm font-semibold text-brand transition hover:border-brand hover:bg-brand-light/50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          + Přidat otázku
-        </button>
+        <div className="rounded-3xl border-2 border-dashed border-brand/30 bg-white/60 p-4">
+          <p className="text-sm font-semibold text-gray-700">Přidat slajd</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {ADD_SLIDE.map((item) => (
+              <button
+                key={item.kind}
+                type="button"
+                onClick={() => addSlide(item.kind)}
+                disabled={!canAdd(item.kind) || saving}
+                className="flex flex-col items-start gap-1 rounded-2xl border-2 border-gray-200 bg-white px-3 py-2.5 text-left transition hover:border-brand hover:bg-brand-light/40 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold ${SLIDE_KIND_BADGE[item.kind]}`}>{SLIDE_KIND_ICON[item.kind]}</span>
+                  {item.label}
+                </span>
+                <span className="text-xs text-gray-500">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            Při promítání stačí tlačítko „Další“: otázka se sama otevře a dalším krokem uzavře. Nejvýš {LIMITS.MAX_SLIDES} slajdů, z toho{" "}
+            {LIMITS.MAX_QUESTIONS} otázek.
+          </p>
+        </div>
       )}
 
       {/* Ukládací lišta je pořád na očích i u dlouhého seznamu otázek. */}
@@ -612,10 +737,16 @@ function QuestionCard({
   single = false,
   onMoveUp,
   onMoveDown,
+  all,
+  requireNames,
+  onAddResults,
 }: {
   question: QuestionDraft;
   index: number;
   total: number;
+  all: QuestionDraft[];
+  requireNames: boolean;
+  onAddResults?: () => void;
   imagesEnabled: boolean;
   disabled: boolean;
   onToggle: () => void;
@@ -632,17 +763,26 @@ function QuestionCard({
 }) {
   const previewUrl = question.image?.kind === "pending" ? question.image.previewUrl : question.image?.url;
   const actionClass = "rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30";
+  const linkProblem = question.kind === "results" ? resultsLinkProblem(question, all) : null;
+  const summary = slideSummary(question, all);
 
   return (
     <li className={`rounded-3xl border shadow-soft ${question.locked ? "border-gray-200 bg-gray-50" : "border-gray-200 bg-white"}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-t-3xl border-b border-gray-100 bg-brand-light/40 px-4 py-3 sm:px-5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-bold text-white">{index + 1}</span>
+        {!single && (
+          <span
+            className={`flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-bold ${SLIDE_KIND_BADGE[question.kind]}`}
+            title={SLIDE_KIND_LABEL[question.kind]}
+          >
+            <span aria-hidden="true">{SLIDE_KIND_ICON[question.kind]}</span>
+            <span className="hidden sm:inline">{SLIDE_KIND_LABEL[question.kind]}</span>
+          </span>
+        )}
         <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left" aria-expanded={question.expanded}>
-          <span className="block truncate font-semibold text-gray-900">{question.text.trim() || "Nová otázka"}</span>
-          <span className="block text-xs text-gray-500">
-            {question.options.length} odpovědi
-            {question.image ? " · obrázek" : ""}
-            {question.linkUrl.trim() ? " · odkaz" : ""}
+          <span className="block truncate font-semibold text-gray-900">{summary.title}</span>
+          <span className={`block truncate text-xs ${linkProblem ? "font-semibold text-red-600" : "text-gray-500"}`}>
+            {linkProblem ? `⚠ ${linkProblem}` : summary.detail}
           </span>
         </button>
         {question.locked && (
@@ -679,6 +819,20 @@ function QuestionCard({
         <div className="flex flex-col gap-5 px-4 py-5 sm:px-5">
           {question.locked ? (
             <LockedQuestionBody question={question} previewUrl={previewUrl} />
+          ) : question.kind === "content" ? (
+            <ContentFields
+              question={question}
+              previewUrl={previewUrl}
+              imagesEnabled={imagesEnabled}
+              disabled={disabled}
+              onChange={onChange}
+              onPickImage={onPickImage}
+              onRemoveImage={onRemoveImage}
+            />
+          ) : question.kind === "results" ? (
+            <ResultsFields question={question} all={all} problem={linkProblem} onChange={onChange} />
+          ) : question.kind === "leaderboard" ? (
+            <LeaderboardFields question={question} all={all} requireNames={requireNames} onChange={onChange} />
           ) : (
             <>
               <label className="flex flex-col gap-1.5">
@@ -762,10 +916,27 @@ function QuestionCard({
                     </>
                   )}
                 </p>
+                {!single && question.options.some((o) => o.key === question.correctKey) && (
+                  <label className="ml-9 flex flex-wrap items-center gap-2 rounded-xl bg-pastel-green/60 px-3 py-2 text-sm text-gray-800">
+                    <span className="font-medium">Body za správnou odpověď</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={LIMITS.MAX_POINTS}
+                      value={question.points}
+                      onChange={(e) => onChange({ points: Math.min(LIMITS.MAX_POINTS, Math.max(1, Math.round(Number(e.target.value) || 1))) })}
+                      className="w-20 rounded-lg border-2 border-gray-200 bg-white px-2 py-1 text-gray-900 focus:border-brand focus:outline-none"
+                    />
+                    <span className="text-xs text-gray-600">Správně = tolik bodů, jinak 0. Bez bonusů za rychlost a bez záporných bodů.</span>
+                  </label>
+                )}
               </div>
 
               <LinkField question={question} onChange={onChange} />
             </>
+          )}
+          {!single && question.kind === "question" && onAddResults && (
+            <ResultsShortcut question={question} all={all} onAdd={onAddResults} />
           )}
         </div>
       )}
@@ -969,5 +1140,247 @@ function LinkField({ question, onChange }: { question: QuestionDraft; onChange: 
         Odebrat odkaz
       </button>
     </fieldset>
+  );
+}
+
+function contentLayout(question: QuestionDraft): string {
+  const title = question.text.trim();
+  const body = question.body.trim();
+  if (question.image && !body) return title ? "Obrázek s nadpisem" : "Samotný obrázek";
+  if (question.image) return "Nadpis, text a obrázek";
+  if (body) return title ? "Nadpis a text" : "Samotný text";
+  return title ? "Samotný nadpis" : "Prázdný slajd";
+}
+
+function scoredBefore(question: QuestionDraft, all: QuestionDraft[]): number {
+  const index = all.indexOf(question);
+  return all.slice(0, index).filter((q) => q.kind === "question" && q.options.some((o) => o.key === q.correctKey)).length;
+}
+
+/** Název a stručný náhled slajdu do hlavičky karty. */
+function slideSummary(question: QuestionDraft, all: QuestionDraft[]): { title: string; detail: string } {
+  switch (question.kind) {
+    case "content":
+      return {
+        title: question.text.trim() || question.body.trim().split("\n")[0] || (question.image ? "Obrázek" : "Nový obsah"),
+        detail: contentLayout(question),
+      };
+    case "results": {
+      const targetIndex = all.findIndex((q) => q.key === question.resultsKey);
+      const target = all[targetIndex];
+      return {
+        title: target ? `Výsledky: ${target.text.trim() || "Nová otázka"}` : "Výsledky otázky",
+        detail: target ? `Ke slajdu ${targetIndex + 1}` : "",
+      };
+    }
+    case "leaderboard": {
+      const scored = scoredBefore(question, all);
+      return {
+        title: question.text.trim() || "Průběžné pořadí",
+        detail: scored ? `Započítá ${scored} ${scored === 1 ? "bodovanou otázku" : scored <= 4 ? "bodované otázky" : "bodovaných otázek"} před tímto slajdem` : "Před slajdem není bodovaná otázka",
+      };
+    }
+    default: {
+      const correct = question.options.some((o) => o.key === question.correctKey);
+      return {
+        title: question.text.trim() || "Nová otázka",
+        detail: [
+          `${question.options.length} odpovědi`,
+          question.image ? "obrázek" : "",
+          question.linkUrl.trim() ? "odkaz" : "",
+          correct ? `bodovaná (${question.points} b.)` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      };
+    }
+  }
+}
+
+function ContentFields({
+  question,
+  previewUrl,
+  imagesEnabled,
+  disabled,
+  onChange,
+  onPickImage,
+  onRemoveImage,
+}: {
+  question: QuestionDraft;
+  previewUrl?: string;
+  imagesEnabled: boolean;
+  disabled: boolean;
+  onChange: (patch: Partial<QuestionDraft>) => void;
+  onPickImage: (file: File) => void;
+  onRemoveImage: () => void;
+}) {
+  const lines = question.body.split("\n").filter((line) => line.trim()).length;
+  const longBody = question.body.trim().length > LIMITS.SLIDE_BODY_WARN_LENGTH || lines > 8;
+  const longTitle = question.text.trim().length > LIMITS.SLIDE_TITLE_WARN_LENGTH;
+
+  return (
+    <>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-700">Nadpis</span>
+        <input
+          type="text"
+          value={question.text}
+          onChange={(e) => onChange({ text: e.target.value })}
+          maxLength={LIMITS.MAX_QUESTION_LENGTH}
+          placeholder="např. Vítejte na školení"
+          className="rounded-xl border-2 border-gray-200 px-4 py-2.5 text-lg font-semibold text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
+        />
+        {longTitle && <span className="text-xs text-amber-700">Dlouhý nadpis bude na plátně zalomený do více řádků. Zkuste ho zkrátit.</span>}
+      </label>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-700">Text (nepovinné)</span>
+        <textarea
+          value={question.body}
+          onChange={(e) => onChange({ body: e.target.value })}
+          maxLength={LIMITS.MAX_SLIDE_BODY_LENGTH}
+          rows={5}
+          placeholder={"Krátký text pro publikum.\n\n- odrážka\n- další odrážka"}
+          className="resize-y rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
+        />
+        <span className="text-xs text-gray-500">
+          Prázdný řádek = nový odstavec. Řádky začínající „- “ se zobrazí jako odrážky. {question.body.trim().length}/{LIMITS.MAX_SLIDE_BODY_LENGTH} znaků.
+        </span>
+        {longBody && (
+          <span className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+            Hodně textu bude při promítání špatně čitelné ze zadních řad. Zkuste ho zkrátit nebo rozdělit na dva slajdy.
+          </span>
+        )}
+      </label>
+
+      <ImageField
+        question={question}
+        previewUrl={previewUrl}
+        imagesEnabled={imagesEnabled}
+        disabled={disabled}
+        onPick={onPickImage}
+        onRemove={onRemoveImage}
+        onAltChange={(imageAlt) => onChange({ imageAlt })}
+      />
+      <p className="text-xs text-gray-500">
+        Rozložení se nastaví samo podle vyplněných polí: <span className="font-semibold text-gray-700">{contentLayout(question)}</span>. Obrázek se
+        nedeformuje, jen zmenší, aby se vešel.
+      </p>
+    </>
+  );
+}
+
+function ResultsFields({
+  question,
+  all,
+  problem,
+  onChange,
+}: {
+  question: QuestionDraft;
+  all: QuestionDraft[];
+  problem: string | null;
+  onChange: (patch: Partial<QuestionDraft>) => void;
+}) {
+  const index = all.indexOf(question);
+  const candidates = all.slice(0, index).flatMap((q, position) => (q.kind === "question" ? [{ q, position }] : []));
+  const value = candidates.some(({ q }) => q.key === question.resultsKey) ? question.resultsKey ?? "" : "";
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-700">Výsledky které otázky?</span>
+        <select
+          value={value}
+          onChange={(e) => onChange({ resultsKey: e.target.value || null })}
+          aria-invalid={Boolean(problem)}
+          className={`rounded-xl border-2 bg-white px-4 py-2.5 text-gray-900 focus:outline-none focus:ring-4 ${
+            problem ? "border-red-300 focus:border-red-500 focus:ring-red-100" : "border-gray-200 focus:border-brand focus:ring-brand/10"
+          }`}
+        >
+          <option value="">— vyberte otázku —</option>
+          {candidates.map(({ q, position }) => (
+            <option key={q.key} value={q.key}>
+              Slajd {position + 1}: {q.text.trim() || "Nová otázka"}
+            </option>
+          ))}
+        </select>
+      </label>
+      {problem && <p className="text-sm font-medium text-red-600">⚠ {problem.charAt(0).toUpperCase() + problem.slice(1)}</p>}
+      {candidates.length === 0 && <p className="text-sm text-gray-600">Před tímto slajdem zatím není žádná otázka. Přesuňte ho za otázku.</p>}
+      <p className="text-xs text-gray-500">
+        Na plátně se ukáže rozložení odpovědí, počet odpovídajících a u otázky se správnou odpovědí i vyhodnocení. Odpovídání se uzavře už
+        přechodem na tento slajd.
+      </p>
+    </div>
+  );
+}
+
+function LeaderboardFields({
+  question,
+  all,
+  requireNames,
+  onChange,
+}: {
+  question: QuestionDraft;
+  all: QuestionDraft[];
+  requireNames: boolean;
+  onChange: (patch: Partial<QuestionDraft>) => void;
+}) {
+  const scored = scoredBefore(question, all);
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-700">Nadpis</span>
+        <input
+          type="text"
+          value={question.text}
+          onChange={(e) => onChange({ text: e.target.value })}
+          maxLength={LIMITS.MAX_QUESTION_LENGTH}
+          placeholder="Průběžné pořadí"
+          className="rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {["Průběžné pořadí", "Konečné výsledky"].map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            onClick={() => onChange({ text: preset })}
+            className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-700 hover:border-brand hover:text-brand"
+          >
+            {preset}
+          </button>
+        ))}
+      </div>
+      {scored === 0 ? (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Před tímto slajdem není žádná bodovaná otázka. Body se počítají jen u otázek s označenou správnou odpovědí — běžné hlasování body nedává.
+        </p>
+      ) : (
+        <p className="rounded-xl bg-pastel-green/60 px-4 py-3 text-sm text-gray-800">
+          Započítá {scored} {scored === 1 ? "bodovanou otázku" : scored <= 4 ? "bodované otázky" : "bodovaných otázek"} před tímto slajdem, které už
+          byly při promítání uzavřené. Pozdější otázky se do tohoto pořadí nepočítají.
+        </p>
+      )}
+      {!requireNames && (
+        <p className="text-xs text-gray-500">
+          Hlasování je anonymní, v pořadí proto budou „Anonymní účastník 1, 2, …“. Přezdívky ukáže jen hlasování se zapnutým zadáváním jména (volí se
+          při vytvoření).
+        </p>
+      )}
+      <p className="text-xs text-gray-500">Na plátně se ukáže prvních {LIMITS.LEADERBOARD_PAGE_SIZE} míst, další místa tlačítkem v promítání.</p>
+    </div>
+  );
+}
+
+function ResultsShortcut({ question, all, onAdd }: { question: QuestionDraft; all: QuestionDraft[]; onAdd: () => void }) {
+  const existing = all.findIndex((q) => q.kind === "results" && q.resultsKey === question.key);
+  if (existing !== -1) {
+    return <p className="text-xs text-gray-500">Výsledky této otázky jsou na slajdu {existing + 1}.</p>;
+  }
+  return (
+    <button type="button" onClick={onAdd} className="self-start text-sm font-semibold text-brand hover:underline">
+      + Výsledky za tuto otázku (slajd hned za ní)
+    </button>
   );
 }

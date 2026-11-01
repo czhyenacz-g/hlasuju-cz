@@ -7,7 +7,7 @@ import { isModeratorTokenFormat } from "../../../../lib/polls/find-poll.ts";
 import { isImageStorageConfigured } from "../../../../lib/images/storage.ts";
 
 export const metadata: Metadata = {
-  title: "Upravit otázky",
+  title: "Upravit prezentaci",
   robots: { index: false, follow: false },
 };
 
@@ -30,10 +30,10 @@ export default async function EditPollPage({
       <Link href={`/m/${moderatorToken}`} className="text-sm text-gray-500 hover:underline">
         ← Zpět na řízení hlasování
       </Link>
-      <h1 className="mt-3 text-3xl font-bold tracking-tight text-gray-900">Upravit otázky</h1>
+      <h1 className="mt-3 text-3xl font-bold tracking-tight text-gray-900">{content.mode === "self_service" ? "Upravit anketu" : "Upravit prezentaci"}</h1>
       <p className="mt-2 text-gray-600">
-        Kód pro účastníky <span className="font-semibold text-gray-900">{content.publicCode}</span> zůstává stejný. Nespuštěné otázky můžete
-        libovolně měnit i během prezentace, spuštěné už jen přesouvat.
+        Kód pro účastníky <span className="font-semibold text-gray-900">{content.publicCode}</span> zůstává stejný. Slajdy a nespuštěné otázky
+        můžete měnit i během prezentace, spuštěné otázky už jen přesouvat.
       </p>
 
       <div className="mt-8">

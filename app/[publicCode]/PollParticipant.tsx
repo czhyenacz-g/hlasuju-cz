@@ -33,20 +33,36 @@ function storeName(publicCode: string, name: string | null) {
   }
 }
 
-// Klientská hlídka "hlasoval(a) jsem už u téhle otázky" — resetuje se
-// pokaždé, když moderátor aktivuje jinou otázku (viz activeQuestionId
-// v effectu níž). Server má vlastní nezávislou ochranu (unique index),
-// tohle je jen pro instantní UX bez čekání na chybu z API.
+// Odeslané odpovědi (ID otázky → ID odpovědi) — po obnovení stránky se
+// načtou ze serveru (jen vlastní, podle participantId), takže se účastníkovi
+// u už zodpovězené otázky znovu neukáže formulář. Server má vlastní
+// nezávislou ochranu (unique index), tohle je jen pro UX.
 export default function PollParticipant({ publicCode }: { publicCode: string }) {
   const [participantId, setParticipantId] = useState<string | null>(null);
-  const [voted, setVoted] = useState<{ questionId: number; optionId: number; optionText: string } | null>(null);
+  const [myVotes, setMyVotes] = useState<Record<string, number>>({});
   const [voting, setVoting] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [participantName, setParticipantName] = useState<string | null>(null);
 
   useEffect(() => {
-    setParticipantId(getOrCreateParticipantId());
+    const id = getOrCreateParticipantId();
+    setParticipantId(id);
     setParticipantName(readStoredName(publicCode));
+    // Obnovit stav po reloadu (best effort — bez něj se jen znovu ukáže formulář).
+    const controller = new AbortController();
+    fetch(`/api/polls/public/${publicCode}/participant?participantId=${encodeURIComponent(id)}`, { signal: controller.signal, cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((state: { name: string | null; votes: Record<string, number> } | null) => {
+        if (!state) return;
+        // Server má přednost — první uložená odpověď je ta platná.
+        setMyVotes((current) => ({ ...current, ...state.votes }));
+        if (state.name) {
+          storeName(publicCode, state.name);
+          setParticipantName(state.name);
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
   }, [publicCode]);
 
   const fetcher = useCallback(
@@ -64,15 +80,15 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
 
   const activeQuestion = data && !data.notFound ? data.poll.activeQuestion : null;
   const closedQuestion = data && !data.notFound ? data.poll.closedQuestion : null;
+  const slide = data && !data.notFound ? (data.poll.slide ?? null) : null;
+  const activeQuestionId = activeQuestion?.id ?? null;
 
+  // Chybová hláška patří jen k otázce, u které vznikla.
   useEffect(() => {
-    if (activeQuestion && voted !== null && voted.questionId !== activeQuestion.id) {
-      setVoted(null);
-      setVoteError(null);
-    }
-  }, [activeQuestion, voted]);
+    setVoteError(null);
+  }, [activeQuestionId]);
 
-  async function castVote(optionId: number, optionText: string) {
+  async function castVote(optionId: number) {
     if (!activeQuestion || !participantId || voting) return;
     setVoting(true);
     setVoteError(null);
@@ -93,7 +109,8 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
         setVoting(false);
         return;
       }
-      setVoted({ questionId: activeQuestion.id, optionId, optionText });
+      const questionId = activeQuestion.id;
+      setMyVotes((current) => ({ ...current, [String(questionId)]: current[String(questionId)] ?? optionId }));
     } catch {
       setVoteError("Hlas se nepodařilo zaznamenat. Zkuste to prosím znovu.");
     } finally {
@@ -136,17 +153,22 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   }
 
   if (closedQuestion) {
-    // Fáze vyhodnocení: moderátor otázku ukončil, další ještě nespustil.
-    // Teprve tady se odkrývá odkaz (může obsahovat správnou odpověď).
+    // Fáze vyhodnocení: moderátor otázku ukončil (nebo se promítají její
+    // výsledky), další ještě nespustil. Teprve tady se odkrývá odkaz (může
+    // obsahovat správnou odpověď).
     return (
-      <StateScreen title="Hlasování u otázky skončilo" message="Čekáme na další otázku…" showAd>
+      <StateScreen
+        title="Hlasování u otázky skončilo"
+        message={slide?.kind === "results" ? "Výsledky jsou na plátně." : "Čekáme na další otázku…"}
+        showAd
+      >
         <div className="mt-6 text-left">
           <p className="font-semibold text-gray-900">{closedQuestion.text}</p>
           {closedQuestion.correctOptionId !== null && (
             <AnswerEvaluation
               options={closedQuestion.options}
               correctOptionId={closedQuestion.correctOptionId}
-              myOptionId={voted?.questionId === closedQuestion.id ? voted.optionId : null}
+              myOptionId={myVotes[String(closedQuestion.id)] ?? null}
             />
           )}
           {closedQuestion.link && <QuestionLink link={closedQuestion.link} className="mt-3" />}
@@ -156,20 +178,27 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   }
 
   if (!activeQuestion) {
+    // Obsahový slajd, žebříček nebo výsledky dosud nepoložené otázky:
+    // žádný formulář, jen ať účastník sleduje plátno.
+    if (slide) {
+      return <StateScreen title="Prezentace pokračuje" message="Sledujte promítání." showAd />;
+    }
     return (
       <StateScreen title="Jste připojeni" message="Čekáme na další otázku moderátora…" showAd />
     );
   }
 
-  if (voted?.questionId === activeQuestion.id) {
+  const myOptionId = myVotes[String(activeQuestion.id)];
+  if (myOptionId !== undefined) {
     // Hlas je odeslaný, hlavní úkol dokončen -> compact banner je tu v
     // pořádku (viz zadání "zobraz ho ve chvíli, kdy uživatel odešle
     // odpověď"), nikdy ale nad/mezi otázkou a odpověďmi výš.
+    const optionText = activeQuestion.options.find((option) => option.id === myOptionId)?.text;
     return (
       <StateScreen title="✓ Hlas byl zaznamenán" message="Čekáme na další otázku…" showAd>
-        {voted.optionText && (
+        {optionText && (
           <p className="mt-4 rounded-xl bg-pastel-green px-4 py-3 text-gray-800">
-            Vaše odpověď: <span className="font-semibold">{voted.optionText}</span>
+            Vaše odpověď: <span className="font-semibold">{optionText}</span>
           </p>
         )}
       </StateScreen>
@@ -191,7 +220,7 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
             <button
               key={option.id}
               type="button"
-              onClick={() => castVote(option.id, option.text)}
+              onClick={() => castVote(option.id)}
               disabled={voting || !participantId}
               className="min-h-[64px] w-full rounded-2xl border-2 border-gray-200 bg-white px-6 py-4 text-lg font-semibold text-gray-900 shadow-soft transition hover:border-brand hover:bg-brand-light/40 hover:text-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 active:scale-[0.99] disabled:opacity-60"
             >

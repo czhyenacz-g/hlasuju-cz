@@ -1,7 +1,8 @@
 import "server-only";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
-import { options, polls, questions, votes } from "../../db/schema.ts";
+import { options, participants, polls, questions, votes } from "../../db/schema.ts";
+import { computeLeaderboard } from "./leaderboard.ts";
 import { questionMediaColumns, toQuestionImage, toQuestionLink } from "./question-media.ts";
 import { isEmailConfigured } from "../email/send-email.ts";
 import { maskEmail, RESULTS_EMAIL_MAX_SENDS } from "./send-results-email.ts";
@@ -42,6 +43,10 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       position: questions.position,
       status: questions.status,
       correctOptionId: questions.correctOptionId,
+      kind: questions.kind,
+      body: questions.body,
+      resultsQuestionId: questions.resultsQuestionId,
+      points: questions.points,
       ...questionMediaColumns,
     })
     .from(questions)
@@ -70,11 +75,18 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
     optionsByQuestion.set(row.questionId, list);
   }
 
+  const leaderboardFor = await loadLeaderboards(poll.id, poll.requireParticipantName, questionRows);
+
   const questionViews: ModeratorQuestionView[] = questionRows.map((q) => {
     const questionOptions = optionsByQuestion.get(q.id) ?? [];
     return {
       id: q.id,
+      kind: q.kind as ModeratorQuestionView["kind"],
       text: q.text,
+      body: q.body,
+      resultsQuestionId: q.resultsQuestionId,
+      points: q.points,
+      leaderboard: q.kind === "leaderboard" ? leaderboardFor(q.position) : null,
       position: q.position,
       status: q.status as ModeratorQuestionView["status"],
       image: toQuestionImage(q),
@@ -110,4 +122,48 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       remaining: Math.max(0, RESULTS_EMAIL_MAX_SENDS - poll.resultsEmailCount),
     },
   };
+}
+
+type SlideRow = { id: number; kind: string; position: number; status: string; correctOptionId: number | null; points: number };
+
+/**
+ * Žebříčky slajdů „leaderboard“ — počítá se jen, když prezentace nějaký
+ * má. Štítky jako v detailu odpovědí: jméno (u shodných jmen „Anna (2)“),
+ * jinak „Anonymní účastník N“ podle pořadí prvního hlasu.
+ */
+async function loadLeaderboards(pollId: number, named: boolean, slides: SlideRow[]) {
+  if (!slides.some((slide) => slide.kind === "leaderboard")) return () => null;
+  const db = getDb();
+
+  const voteRows = await db
+    .select({ participantId: votes.participantId, questionId: votes.questionId, optionId: votes.optionId, createdAt: votes.createdAt })
+    .from(votes)
+    .innerJoin(questions, eq(votes.questionId, questions.id))
+    .where(eq(questions.pollId, pollId))
+    .orderBy(votes.createdAt, votes.participantId);
+  const nameRows = named
+    ? await db
+        .select({ participantId: participants.participantId, name: participants.name })
+        .from(participants)
+        .where(eq(participants.pollId, pollId))
+        .orderBy(participants.createdAt, participants.participantId)
+    : [];
+
+  const order = new Map<string, number>();
+  for (const row of voteRows) if (!order.has(row.participantId)) order.set(row.participantId, order.size + 1);
+  const names = new Map(nameRows.map((row) => [row.participantId, row.name]));
+  const sameName = new Map<string, string[]>();
+  for (const [participantId, name] of names) {
+    const key = name.toLocaleLowerCase("cs");
+    sameName.set(key, [...(sameName.get(key) ?? []), participantId]);
+  }
+  const labelFor = (participantId: string) => {
+    const name = names.get(participantId);
+    if (!name) return `Anonymní účastník ${order.get(participantId) ?? order.size + 1}`;
+    const group = sameName.get(name.toLocaleLowerCase("cs")) ?? [];
+    return group.length > 1 ? `${name} (${group.indexOf(participantId) + 1})` : name;
+  };
+
+  const typedSlides = slides.map((slide) => ({ ...slide, kind: slide.kind as ModeratorQuestionView["kind"], status: slide.status as ModeratorQuestionView["status"] }));
+  return (position: number) => computeLeaderboard(typedSlides, position, voteRows, labelFor, [...names.keys()]);
 }

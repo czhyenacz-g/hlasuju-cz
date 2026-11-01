@@ -18,7 +18,7 @@ async function runSqlFile(client: PGlite, file: string) {
   }
 }
 
-describe("migrace 0001–0006 jsou zpětně kompatibilní", () => {
+describe("migrace 0001–0007 jsou zpětně kompatibilní", () => {
   test("hlasování založené před migrací (bez obrázků/odkazů) dál funguje", async () => {
     const client = new PGlite();
     const files = readdirSync(MIGRATIONS_FOLDER).filter((file) => file.endsWith(".sql")).sort();
@@ -61,6 +61,13 @@ describe("migrace 0001–0006 jsou zpětně kompatibilní", () => {
       // 0006: historická hlasování zůstávají živá (moderovaná).
       assert.equal(view?.mode, "live");
       assert.equal(moderator?.mode, "live");
+      // 0007: historické otázky jsou slajdy typu „otázka“ za 1 bod, bez vazeb.
+      assert.equal(moderator?.questions[0].kind, "question");
+      assert.equal(moderator?.questions[0].points, 1);
+      assert.equal(moderator?.questions[0].body, null);
+      assert.equal(moderator?.questions[0].resultsQuestionId, null);
+      assert.equal(moderator?.questions[0].leaderboard, null);
+      assert.equal(view?.slide, null);
 
       // Zápisy ve tvaru staré verze aplikace (bez nových sloupců) dál projdou.
       await client.exec(`
