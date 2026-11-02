@@ -79,12 +79,15 @@ export default function Home() {
             href="https://nechcivolit.cz/"
             target="_blank"
             rel="noopener"
-            className="group block rounded-3xl border border-gray-200 bg-white/80 p-5 transition hover:border-brand/40 hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 sm:p-6"
+            className="block rounded-2xl border border-gray-200 bg-white/60 px-5 py-4 transition hover:border-brand/30 hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20"
           >
-            <p className="text-balance text-base font-semibold text-gray-900 sm:text-lg">
-              Demokracie nekončí u voleb, ale začíná s nimi. Politici nedostávají bianco šek, aby mohli dělat cokoliv si zlíbí!
-            </p>
-            <p className="mt-2 text-sm font-semibold text-brand-dark group-hover:underline">nechcivolit.cz →</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Demokracie nekončí u voleb, ale začíná s nimi.</p>
+                <p className="mt-0.5 text-pretty text-sm text-gray-600">Politici nedostávají bianco šek, aby mohli dělat cokoliv si zlíbí!</p>
+              </div>
+              <span className="inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold text-brand">nechcivolit.cz →</span>
+            </div>
           </a>
           <AlphegaAffiliateBanner variant="standard" />
         </div>
