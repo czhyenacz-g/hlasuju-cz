@@ -92,6 +92,12 @@ export default function Home() {
           <AlphegaAffiliateBanner variant="standard" />
         </div>
       </div>
+
+      <footer className="mt-10 text-center text-xs text-gray-500">
+        <Link href="/srovnani" className="inline-flex min-h-[44px] items-center px-3 underline-offset-4 hover:text-gray-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20">
+          Srovnání nástrojů
+        </Link>
+      </footer>
     </main>
   );
 }
