@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePolling } from "../../lib/use-polling.ts";
 import { getOrCreateParticipantId } from "../../lib/participant-id.ts";
 import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx";
@@ -87,6 +87,42 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   useEffect(() => {
     setVoteError(null);
   }, [activeQuestionId]);
+
+  // Při každé změně slajdu srovnat vlastní hlasy a jméno se serverem —
+  // moderátor mohl prezentaci vynulovat („Znovu od začátku“, reset-poll.ts),
+  // pak by tu jinak zůstal starý „Hlas byl zaznamenán“ a staré jméno.
+  const activeSlideKey = data && !data.notFound ? `${data.poll.pollStatus}:${activeQuestionId}:${slide?.kind ?? ""}:${closedQuestion?.id ?? ""}` : null;
+  const firstSyncRef = useRef(true);
+  useEffect(() => {
+    if (!participantId || activeSlideKey === null) return;
+    if (firstSyncRef.current) {
+      // Úvodní načtení obstarává efekt výše.
+      firstSyncRef.current = false;
+      return;
+    }
+    const controller = new AbortController();
+    const syncedQuestionId = activeQuestionId;
+    fetch(`/api/polls/public/${publicCode}/participant?participantId=${encodeURIComponent(participantId)}`, { signal: controller.signal, cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((state: { name: string | null; votes: Record<string, number> } | null) => {
+        if (!state) return;
+        // Server je zdroj pravdy; jen hlas právě odeslaný k aktuální otázce
+        // (mohl předběhnout tuhle odpověď) se ponechá.
+        setMyVotes((current) => {
+          const next = { ...state.votes };
+          const key = String(syncedQuestionId);
+          if (syncedQuestionId !== null && current[key] !== undefined && next[key] === undefined) next[key] = current[key];
+          return next;
+        });
+        if (!state.name) {
+          storeName(publicCode, null);
+          setParticipantName(null);
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jen při změně slajdu
+  }, [activeSlideKey, participantId, publicCode]);
 
   async function castVote(optionId: number) {
     if (!activeQuestion || !participantId || voting) return;

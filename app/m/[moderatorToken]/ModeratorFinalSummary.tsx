@@ -21,6 +21,8 @@ export default function ModeratorFinalSummary({
   onNewRun,
   newRunPending,
   newRunError,
+  onReset,
+  resetPending,
 }: {
   poll: ModeratorPollView;
   moderatorToken: string;
@@ -30,6 +32,8 @@ export default function ModeratorFinalSummary({
   onNewRun: () => void;
   newRunPending: boolean;
   newRunError: string | null;
+  onReset: () => void;
+  resetPending: boolean;
 }) {
   const [showDetails, setShowDetails] = useState(false);
   // Jen otázky — obsahové, výsledkové a žebříčkové slajdy nejsou výsledky.
@@ -152,16 +156,27 @@ export default function ModeratorFinalSummary({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Promítat znovu</h2>
         <p className="mt-2 text-sm text-gray-600">
           Stejnou prezentaci můžete pustit dalšímu publiku. Vznikne nový kód a nový odkaz na řízení, odpovědi a body začnou od nuly. Tyto výsledky
-          zůstanou beze změny.
+          zůstanou beze změny. Šlo-li jen o zkoušku nanečisto, můžete prezentaci místo toho vynulovat — smažou se odpovědi, body i jména a
+          kód zůstane stejný.
         </p>
-        <button
-          type="button"
-          onClick={onNewRun}
-          disabled={newRunPending}
-          className="mt-3 rounded-xl border-2 border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-800 hover:border-brand hover:text-brand disabled:opacity-60"
-        >
-          {newRunPending ? "Vytvářím…" : "Nové promítání pro jiné publikum"}
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onNewRun}
+            disabled={newRunPending || resetPending}
+            className="rounded-xl border-2 border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-800 hover:border-brand hover:text-brand disabled:opacity-60"
+          >
+            {newRunPending ? "Vytvářím…" : "Nové promítání pro jiné publikum"}
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={newRunPending || resetPending}
+            className="rounded-xl border-2 border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-800 hover:border-red-300 hover:text-red-700 disabled:opacity-60"
+          >
+            {resetPending ? "Nuluji…" : "↺ Znovu od začátku (smazat odpovědi)"}
+          </button>
+        </div>
         {newRunError && <p className="mt-2 text-sm text-red-600">{newRunError}</p>}
       </section>
       )}

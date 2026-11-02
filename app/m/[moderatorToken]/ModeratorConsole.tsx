@@ -109,6 +109,14 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
     if (poll && optimisticSlideId !== null && poll.activeQuestionId === optimisticSlideId) setOptimisticSlideId(null);
   }, [poll, optimisticSlideId]);
 
+  // Slajd, na který server naposledy potvrdil přechod, dokud ho nedožene
+  // i polling — jinak by rychlé „Další“ hned po přechodu poslalo zastaralé
+  // fromSlideId a server by ho odmítl jako „stale“.
+  const confirmedSlideRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (poll && poll.activeQuestionId === confirmedSlideRef.current) confirmedSlideRef.current = null;
+  }, [poll]);
+
   const runAction = useCallback(
     async (action: ModeratorAction, questionId?: number) => {
       setActionError(null);
@@ -151,9 +159,13 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         const response = await fetch(`/api/polls/moderator/${moderatorToken}/navigate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fromSlideId: current.activeQuestionId, toSlideId }),
+          body: JSON.stringify({ fromSlideId: confirmedSlideRef.current ?? current.activeQuestionId, toSlideId }),
         });
-        if (!response.ok) {
+        confirmedSlideRef.current = null;
+        if (response.ok) {
+          const body = await response.json().catch(() => ({}));
+          if (typeof body.activeSlideId === "number") confirmedSlideRef.current = body.activeSlideId;
+        } else {
           const body = await response.json().catch(() => ({}));
           setOptimisticSlideId(null);
           setActionError(body.error ?? "Přechod se nezdařil.");
@@ -201,6 +213,33 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Nové promítání se nepodařilo vytvořit.");
       setDuplicating(false);
+    }
+  }
+
+  const [resetting, setResetting] = useState(false);
+  async function resetPresentation() {
+    if (
+      !window.confirm(
+        "Začít prezentaci znovu od začátku?\n\nSmažou se všechny odpovědi, body i jména účastníků a všechny otázky se vrátí do stavu před spuštěním — jako by se prezentace nikdy nepřehrávala. Obsah slajdů, kód pro účastníky i tento odkaz zůstanou stejné.\n\nTuto akci nelze vrátit."
+      )
+    ) {
+      return;
+    }
+    setResetting(true);
+    setActionError(null);
+    try {
+      const response = await fetch(`/api/polls/moderator/${moderatorToken}/reset`, { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? "Prezentaci se nepodařilo vynulovat.");
+      setPresenting(false);
+      setOptimisticSlideId(null);
+      confirmedSlideRef.current = null;
+      setCursorId(null);
+      refresh();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Prezentaci se nepodařilo vynulovat.");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -260,6 +299,8 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         onNewRun={startNewRun}
         newRunPending={duplicating}
         newRunError={actionError}
+        onReset={resetPresentation}
+        resetPending={resetting}
       />
     );
   }
@@ -301,6 +342,17 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
           >
             ✎ Upravit prezentaci
           </Link>
+          {(poll.activeQuestionId !== null || poll.questions.some((q) => q.status !== "prepared")) && (
+            <button
+              type="button"
+              onClick={resetPresentation}
+              disabled={resetting}
+              title="Smaže odpovědi, body i jména a vrátí prezentaci do stavu před prvním spuštěním"
+              className="rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:border-red-300 hover:text-red-700 disabled:opacity-60"
+            >
+              {resetting ? "Nuluji…" : "↺ Znovu od začátku"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => startPresenting()}

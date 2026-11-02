@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { jsonRequest, routeParams, setupTestDb } from "./helpers/db.ts";
 import * as navigateRoute from "../app/api/polls/moderator/[moderatorToken]/navigate/route.ts";
 import * as duplicateRoute from "../app/api/polls/moderator/[moderatorToken]/duplicate/route.ts";
+import * as resetRoute from "../app/api/polls/moderator/[moderatorToken]/reset/route.ts";
 import * as participantRoute from "../app/api/polls/public/[publicCode]/participant/route.ts";
 import {
   activate,
@@ -377,6 +378,63 @@ describe("běhy prezentace", () => {
     assert.equal((await participantState(copy.publicCode, "anna")).body.name, null);
     // Původní běh beze změny.
     assert.equal((await getModerator(token)).body.totalVotes, 1);
+  });
+});
+
+async function reset(token: string) {
+  const response = await resetRoute.POST(jsonRequest("/x", "POST") as never, routeParams({ moderatorToken: token }));
+  return { response, body: await response.json() };
+}
+
+describe("znovu od začátku (vynulování)", () => {
+  test("smaže hlasy, body i jména, vrátí otázky na začátek — i po ukončení; kód a odkaz zůstanou", async () => {
+    const { token, code, slides } = await createDeck({ requireParticipantName: true });
+    await register(code, "anna", "Anna");
+    await register(code, "bert", "Bert");
+    await next(token, null, slides[0]);
+    await next(token, slides[0], slides[1]);
+    await vote(code, slides[1].id, slides[1].options[0].id, "anna");
+    await next(token, slides[1], slides[4]);
+    await vote(code, slides[4].id, slides[4].options[1].id, "anna");
+    await vote(code, slides[4].id, slides[4].options[0].id, "bert");
+    await next(token, slides[4], slides[6]);
+    assert.equal(((await endPoll(token)) as Response).status, 200);
+
+    const { response } = await reset(token);
+    assert.equal(response.status, 200);
+
+    const { body: mod } = await getModerator(token);
+    assert.equal(mod.pollStatus, "active");
+    assert.equal(mod.activeQuestionId, null);
+    assert.equal(mod.totalVotes, 0);
+    assert.equal(mod.publicCode, code);
+    const after = mod.questions as ModSlide[];
+    assert.deepEqual(after.map((s) => s.status), slides.map(() => "prepared"));
+    assert.deepEqual(after.map((s) => s.id), slides.map((s) => s.id));
+    assert.equal(after[6].leaderboard?.entries.length, 0);
+    // Účastník musí zadat jméno znovu, jeho staré hlasy zmizely.
+    assert.deepEqual((await participantState(code, "anna")).body, { name: null, votes: {} });
+    const pub = await getPublic(code);
+    assert.equal(pub.body.activeQuestion, null);
+    assert.equal(pub.body.closedQuestion, null);
+
+    // Nový průchod funguje od začátku: otázka se znovu otevře, starý hlas nebrání.
+    await next(token, null, slides[0]);
+    await next(token, slides[0], slides[1]);
+    assert.equal((await vote(code, slides[1].id, slides[1].options[1].id, "anna")).response.status, 403);
+    await register(code, "anna", "Anna");
+    assert.equal((await vote(code, slides[1].id, slides[1].options[1].id, "anna")).response.status, 200);
+    // Obsah je zase volně upravitelný (žádná otázka není „odehraná“).
+    const { body: content } = await getContent(token);
+    const payload = withSlides(content);
+    payload.questions[4].points = 5;
+    assert.equal((await putContent(token, payload)).response.status, 200);
+  });
+
+  test("veřejnou anketu ani neexistující odkaz vynulovat nejde", async () => {
+    const { body } = await createPoll({ mode: "self_service", questions: [{ text: "Kam?", options: [{ text: "A" }, { text: "B" }] }] });
+    assert.equal((await reset(body.moderatorToken)).response.status, 409);
+    assert.equal((await reset("x".repeat(43))).response.status, 404);
   });
 });
 
