@@ -102,7 +102,16 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
 
   const result = await db.transaction(async (tx): Promise<UpdatePollContentResult> => {
     const [poll] = await tx
-      .select({ id: polls.id, status: polls.status, version: polls.version, mode: polls.mode, activeQuestionId: polls.activeQuestionId })
+      .select({
+        id: polls.id,
+        status: polls.status,
+        version: polls.version,
+        mode: polls.mode,
+        activeQuestionId: polls.activeQuestionId,
+        backgroundImageUrl: polls.backgroundImageUrl,
+        backgroundImageWidth: polls.backgroundImageWidth,
+        backgroundImageHeight: polls.backgroundImageHeight,
+      })
       .from(polls)
       .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
       .limit(1)
@@ -192,7 +201,10 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
           .where(and(eq(pollImages.pollId, poll.id), isNull(pollImages.deletedAt)))
       ).map((row) => [row.url, row])
     );
-    for (const row of questionRows) {
+    for (const row of [
+      ...questionRows,
+      { imageUrl: poll.backgroundImageUrl, imageWidth: poll.backgroundImageWidth, imageHeight: poll.backgroundImageHeight },
+    ]) {
       if (row.imageUrl && row.imageWidth && row.imageHeight && !ownImages.has(row.imageUrl)) {
         ownImages.set(row.imageUrl, { url: row.imageUrl, width: row.imageWidth, height: row.imageHeight });
       }
@@ -243,6 +255,25 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         question.image = { ...question.image, width: own.width, height: own.height };
       }
     }
+
+    // Pozadí prezentace: stejná pravidla jako obrázek otázky (jen vlastní obrázek).
+    let background = input.backgroundImage;
+    if (background && background.url !== poll.backgroundImageUrl) {
+      const own = ownImages.get(background.url);
+      if (!own) return invalid("Pozadí prezentace: neplatný obrázek. Nahrajte ho prosím znovu.");
+      background = { url: own.url, width: own.width, height: own.height };
+    } else if (background) {
+      background = { url: background.url, width: poll.backgroundImageWidth ?? background.width, height: poll.backgroundImageHeight ?? background.height };
+    }
+    const backgroundColumns =
+      background === undefined
+        ? {}
+        : {
+            backgroundImageUrl: background?.url ?? null,
+            backgroundImageWidth: background?.width ?? null,
+            backgroundImageHeight: background?.height ?? null,
+          };
+    const backgroundAfter = background === undefined ? poll.backgroundImageUrl : (background?.url ?? null);
 
     const removedQuestions = [...existing.values()].filter((question) => !seen.has(question.id));
     const lockedRemoval = removedQuestions.find(locked);
@@ -329,7 +360,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
     const activeRemoved = poll.activeQuestionId !== null && removedQuestions.some((question) => question.id === poll.activeQuestionId);
     await tx
       .update(polls)
-      .set({ title: input.title ?? null, version: nextVersion, ...(activeRemoved ? { activeQuestionId: null } : {}) })
+      .set({ title: input.title ?? null, version: nextVersion, ...backgroundColumns, ...(activeRemoved ? { activeQuestionId: null } : {}) })
       .where(eq(polls.id, poll.id));
 
     // Obrázky, na které po uložení už nic neodkazuje (odstraněná otázka,
@@ -341,10 +372,11 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         return current && locked(current) ? current.imageUrl : question.image?.url ?? null;
       })
     );
+    stillUsed.add(backgroundAfter);
     pollId = poll.id;
-    removedImageUrls = [...existing.values()]
-      .map((question) => question.imageUrl)
-      .filter((url): url is string => Boolean(url) && !stillUsed.has(url));
+    removedImageUrls = [...[...existing.values()].map((question) => question.imageUrl), poll.backgroundImageUrl].filter(
+      (url): url is string => Boolean(url) && !stillUsed.has(url)
+    );
 
     return { ok: true, version: nextVersion };
   });

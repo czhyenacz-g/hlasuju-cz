@@ -23,7 +23,16 @@ export type DuplicatePollResult =
 export async function duplicatePoll(moderatorToken: string): Promise<DuplicatePollResult> {
   const db = getDb();
   const [poll] = await db
-    .select({ id: polls.id, title: polls.title, email: polls.email, mode: polls.mode, requireParticipantName: polls.requireParticipantName })
+    .select({
+      id: polls.id,
+      title: polls.title,
+      email: polls.email,
+      mode: polls.mode,
+      requireParticipantName: polls.requireParticipantName,
+      backgroundImageUrl: polls.backgroundImageUrl,
+      backgroundImageWidth: polls.backgroundImageWidth,
+      backgroundImageHeight: polls.backgroundImageHeight,
+    })
     .from(polls)
     .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
     .limit(1);
@@ -77,6 +86,13 @@ export async function duplicatePoll(moderatorToken: string): Promise<DuplicatePo
       .update(questions)
       .set({ imageUrl: slide.imageUrl, imageWidth: slide.imageWidth, imageHeight: slide.imageHeight, imageAlt: slide.imageAlt })
       .where(eq(questions.id, created.questionIds[index]));
+  }
+
+  if (poll.backgroundImageUrl) {
+    await db
+      .update(polls)
+      .set({ backgroundImageUrl: poll.backgroundImageUrl, backgroundImageWidth: poll.backgroundImageWidth, backgroundImageHeight: poll.backgroundImageHeight })
+      .where(eq(polls.publicCode, created.publicCode));
   }
 
   return { ok: true, publicCode: created.publicCode, moderatorToken: created.moderatorToken, title: poll.title, email: poll.email };

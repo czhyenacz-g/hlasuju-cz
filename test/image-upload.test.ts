@@ -6,6 +6,7 @@ import { MOCK_CONTENT_API_TOKEN, startMockContentApi, type MockContentApi } from
 import { activate, contentToPayload, createPoll, endPoll, getContent, getModerator, getPublic, putContent } from "./helpers/polls.ts";
 import * as imagesRoute from "../app/api/polls/moderator/[moderatorToken]/images/route.ts";
 import { pollImages } from "../db/schema.ts";
+import * as duplicateRoute from "../app/api/polls/moderator/[moderatorToken]/duplicate/route.ts";
 import { LIMITS } from "../lib/polls/limits.ts";
 
 let testDb: Awaited<ReturnType<typeof setupTestDb>>;
@@ -276,5 +277,75 @@ describe("B — celý workflow obrázku: uložit, zobrazit, nahradit, odstranit"
     assert.equal((await putContent(created.moderatorToken, removed)).response.status, 200);
     const [row] = await testDb.db.select().from(pollImages).where(eq(pollImages.url, image.url));
     assert.equal(row.deletedAt, null, "nesmazaný soubor zůstává v evidenci, dočistí ho cron");
+  });
+});
+
+describe("pozadí prezentace", () => {
+  test("uloží jen vlastní obrázek, moderátor ho vidí, účastník ne; beze změny zůstane, odebrání smaže soubor", async () => {
+    const { body: created } = await createPoll();
+    const token = created.moderatorToken;
+    const { body: content } = await getContent(token);
+    assert.equal(content.backgroundImage, null);
+
+    // Cizí URL nejde.
+    const foreign = { ...contentToPayload(content), backgroundImage: { url: "https://evil.example.com/bg.jpg", width: 10, height: 10 } };
+    assert.equal((await putContent(token, foreign)).response.status, 409);
+
+    // Vlastní upload (rozměry z evidence, ne od klienta).
+    const { body: image } = await upload(token, pngBytes(1600, 900));
+    const saved = await putContent(token, { ...contentToPayload(content), backgroundImage: { url: image.url, width: 1, height: 1 } });
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.body));
+    assert.deepEqual(saved.body.backgroundImage, { url: image.url, width: 1600, height: 900 });
+    assert.deepEqual((await getModerator(token)).body.backgroundImage, { url: image.url, width: 1600, height: 900 });
+    assert.ok(!(await getPublic(created.publicCode)).text.includes(image.url), "účastník pozadí nedostává");
+
+    // Klient bez pole backgroundImage (starší editor) pozadí nezmění.
+    const unchanged = await putContent(token, contentToPayload(saved.body));
+    assert.equal(unchanged.response.status, 200);
+    assert.equal(unchanged.body.backgroundImage.url, image.url);
+
+    // Stejný obrázek i u otázky: odebrání pozadí soubor nesmaže, dokud ho otázka používá.
+    const both = contentToPayload(unchanged.body);
+    both.questions[0].image = { url: image.url, width: 1600, height: 900, alt: null };
+    const withQuestion = await putContent(token, { ...both, backgroundImage: { url: image.url, width: 1600, height: 900 } });
+    assert.equal(withQuestion.response.status, 200);
+    const noBackground = await putContent(token, { ...contentToPayload(withQuestion.body), backgroundImage: null });
+    assert.equal(noBackground.body.backgroundImage, null);
+    let [row] = await testDb.db.select().from(pollImages).where(eq(pollImages.url, image.url));
+    assert.equal(row.deletedAt, null);
+
+    // Teď už ho nic nepoužívá → smaže se.
+    const cleared = contentToPayload(noBackground.body);
+    cleared.questions[0].image = null;
+    assert.equal((await putContent(token, { ...cleared, backgroundImage: null })).response.status, 200);
+    [row] = await testDb.db.select().from(pollImages).where(eq(pollImages.url, image.url));
+    assert.ok(row.deletedAt);
+    assert.equal(api.media.get(row.storageId)?.deleted, true);
+  });
+
+  test("nové promítání převezme pozadí; odebrání v kopii nesmaže soubor originálu", async () => {
+    const { body: created } = await createPoll();
+    const token = created.moderatorToken;
+    const { body: image } = await upload(token, pngBytes(800, 600));
+    const { body: content } = await getContent(token);
+    assert.equal((await putContent(token, { ...contentToPayload(content), backgroundImage: { url: image.url, width: 800, height: 600 } })).response.status, 200);
+
+    const response = await duplicateRoute.POST(new Request("http://localhost/x", { method: "POST", headers: { "x-forwarded-for": uniqueIp() } }) as never, routeParams({ moderatorToken: token }));
+    assert.equal(response.status, 201);
+    const copy = await response.json();
+    assert.equal((await getModerator(copy.moderatorToken)).body.backgroundImage.url, image.url);
+
+    const { body: copyContent } = await getContent(copy.moderatorToken);
+    assert.equal((await putContent(copy.moderatorToken, { ...contentToPayload(copyContent), backgroundImage: null })).response.status, 200);
+    const [row] = await testDb.db.select().from(pollImages).where(eq(pollImages.url, image.url));
+    assert.equal(row.deletedAt, null, "originál pozadí dál používá");
+    assert.equal((await getModerator(token)).body.backgroundImage.url, image.url);
+  });
+
+  test("neplatné pozadí → 400", async () => {
+    const { body: created } = await createPoll();
+    const { body: content } = await getContent(created.moderatorToken);
+    const bad = await putContent(created.moderatorToken, { ...contentToPayload(content), backgroundImage: { url: "javascript:alert(1)", width: 10, height: 10 } });
+    assert.equal(bad.response.status, 400);
   });
 });

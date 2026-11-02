@@ -234,6 +234,10 @@ export default function PollEditor(props: PollEditorProps) {
   const [questions, setQuestions] = useState<QuestionDraft[]>(() =>
     isEdit ? props.initial.questions.map(draftFromQuestion) : [emptyQuestion()]
   );
+  // Obrázek na pozadí promítání (celá prezentace, jen plátno).
+  const [background, setBackground] = useState<ImageDraft | null>(() =>
+    isEdit && props.initial.backgroundImage ? { kind: "stored", ...props.initial.backgroundImage } : null
+  );
   const [savedIds, setSavedIds] = useState<number[]>(() => (isEdit ? props.initial.questions.map((q) => q.id) : []));
   const [status, setStatus] = useState<SaveStatus>(
     isEdit && props.uploadFailed
@@ -374,6 +378,33 @@ export default function PollEditor(props: PollEditorProps) {
     );
   }
 
+  async function pickBackground(file: File) {
+    const prepared = await prepareImage(file);
+    if (!prepared.ok) {
+      setStatus({ kind: "error", message: prepared.error });
+      return;
+    }
+    if (background?.kind === "pending") URL.revokeObjectURL(background.previewUrl);
+    setBackground({ kind: "pending", ...prepared.image });
+    setDirty(true);
+  }
+
+  function removeBackground() {
+    if (background?.kind === "pending") URL.revokeObjectURL(background.previewUrl);
+    setBackground(null);
+    setDirty(true);
+  }
+
+  /** Nahraje nové pozadí (je-li) a vrátí hodnotu pro PUT /content. */
+  async function uploadBackground(moderatorToken: string) {
+    if (background?.kind !== "pending") return background ? { url: background.url, width: background.width, height: background.height } : null;
+    const progress = "Nahrávám pozadí prezentace…";
+    setStatus({ kind: "saving", message: progress });
+    return uploadImage(moderatorToken, background.blob, (seconds) =>
+      setStatus({ kind: "saving", message: `${progress} Úložiště je vytížené, zkouším znovu za ${seconds} s.` })
+    );
+  }
+
   function validateDrafts(): string | null {
     for (const [index, q] of questions.entries()) {
       if (q.locked) continue;
@@ -415,13 +446,21 @@ export default function PollEditor(props: PollEditorProps) {
     return uploaded;
   }
 
-  async function putContent(moderatorToken: string, payloadVersion: number, uploaded: Map<string, { url: string; width: number; height: number }>, idsByKey?: Map<string, number>) {
+  async function putContent(
+    moderatorToken: string,
+    payloadVersion: number,
+    uploaded: Map<string, { url: string; width: number; height: number }>,
+    backgroundImage: { url: string; width: number; height: number } | null,
+    idsByKey?: Map<string, number>
+  ) {
     const response = await fetch(`/api/polls/moderator/${moderatorToken}/content`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         version: payloadVersion,
         title: title.trim() || undefined,
+        // Anketa pro web nemá promítání — pozadí neposílat (= beze změny).
+        ...(selfService ? {} : { backgroundImage }),
         questions: questions.map((q) => {
           const payload = toPayloadQuestion(q, uploaded, questions);
           const createdId = idsByKey?.get(q.key);
@@ -468,13 +507,14 @@ export default function PollEditor(props: PollEditorProps) {
     }
 
     const token: string = body.moderatorToken;
-    const hasImages = questions.some((q) => q.image?.kind === "pending");
+    const hasImages = questions.some((q) => q.image?.kind === "pending") || (!selfService && background !== null);
     if (hasImages) {
       try {
         const uploaded = await uploadPending(token);
+        const backgroundImage = selfService ? null : await uploadBackground(token);
         const idsByKey = new Map(questions.map((q, index) => [q.key, body.questionIds[index] as number]));
         setStatus({ kind: "saving", message: "Ukládám obrázky k otázkám…" });
-        const saved = await putContent(token, 1, uploaded, idsByKey);
+        const saved = await putContent(token, 1, uploaded, backgroundImage, idsByKey);
         if (!saved.response.ok) throw new Error(saved.body.error);
       } catch {
         setDirty(false);
@@ -502,8 +542,9 @@ export default function PollEditor(props: PollEditorProps) {
 
     setStatus({ kind: "saving", message: "Ukládám…" });
     const uploaded = await uploadPending(moderatorToken);
+    const backgroundImage = await uploadBackground(moderatorToken);
     setStatus({ kind: "saving", message: "Ukládám otázky…" });
-    const { response, body } = await putContent(moderatorToken, version, uploaded);
+    const { response, body } = await putContent(moderatorToken, version, uploaded, backgroundImage);
 
     if (!response.ok) {
       if (body.code === "version_conflict" || body.code === "poll_closed") {
@@ -516,6 +557,8 @@ export default function PollEditor(props: PollEditorProps) {
 
     const content = body as EditorContent;
     for (const q of questions) if (q.image?.kind === "pending") URL.revokeObjectURL(q.image.previewUrl);
+    if (background?.kind === "pending") URL.revokeObjectURL(background.previewUrl);
+    setBackground(content.backgroundImage ? { kind: "stored", ...content.backgroundImage } : null);
     setVersion(content.version);
     setSavedIds(content.questions.map((q) => q.id));
     // Zachovat rozbalení podle pozice — po uložení mají nové otázky ID.
@@ -590,6 +633,16 @@ export default function PollEditor(props: PollEditorProps) {
               </span>
             </span>
           </label>
+        )}
+        {!selfService && (
+          <BackgroundField
+            image={background}
+            imagesEnabled={props.imagesEnabled}
+            disabled={saving}
+            onPick={pickBackground}
+            onRemove={removeBackground}
+            wide={!isEdit}
+          />
         )}
         {/* Honeypot proti botům — člověk pole nevidí. */}
         <input
@@ -1418,6 +1471,76 @@ function ScoringFields({ question, onChange }: { question: QuestionDraft; onChan
         </span>
       </label>
       {!question.speedBonus && <p className="mt-1 text-xs text-gray-600">Správně = tolik bodů, jinak 0. Záporné body nejsou.</p>}
+    </div>
+  );
+}
+
+/** Obrázek na pozadí celé prezentace (jen na plátně, ztlumený kvůli čitelnosti). */
+function BackgroundField({
+  image,
+  imagesEnabled,
+  disabled,
+  onPick,
+  onRemove,
+  wide,
+}: {
+  image: ImageDraft | null;
+  imagesEnabled: boolean;
+  disabled: boolean;
+  onPick: (file: File) => void;
+  onRemove: () => void;
+  wide: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const previewUrl = image?.kind === "pending" ? image.previewUrl : image?.url;
+
+  return (
+    <div className={`flex flex-col gap-1.5 ${wide ? "sm:col-span-2" : ""}`}>
+      <span className="text-sm font-medium text-gray-700">Pozadí prezentace (nepovinné)</span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={IMAGE_ACCEPT_ATTRIBUTE}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPick(file);
+          e.target.value = "";
+        }}
+      />
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-cream px-4 py-3">
+        {previewUrl ? (
+          // Náhled se stejným ztlumením jako na plátně.
+          <span className="relative block h-16 w-28 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element -- lokální náhled (blob:) nebo obrázek z Content API */}
+            <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+            <span className="absolute inset-0 bg-white/[0.78]" />
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-800">Aa</span>
+          </span>
+        ) : null}
+        <span className="min-w-0 flex-1 text-xs text-gray-500">
+          {previewUrl
+            ? image?.kind === "pending"
+              ? "Obrázek se nahraje při uložení."
+              : "Zobrazí se za všemi slajdy na plátně, ztlumený, aby text zůstal čitelný."
+            : "Jeden obrázek za všemi slajdy na plátně (účastníkům na telefonech se nezobrazuje). Ztlumí se, aby text zůstal čitelný."}
+        </span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={disabled || !imagesEnabled}
+            className="rounded-xl border-2 border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:border-brand hover:text-brand disabled:opacity-50"
+          >
+            {previewUrl ? "Nahradit" : "+ Vybrat obrázek"}
+          </button>
+          {previewUrl && (
+            <button type="button" onClick={onRemove} disabled={disabled} className="rounded-xl px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+              Odebrat
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

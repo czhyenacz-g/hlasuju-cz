@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
-import { pollImages, questions } from "../../db/schema.ts";
+import { pollImages, polls, questions } from "../../db/schema.ts";
 import { getImageStorage, ImageStorageError, type ImageStorage } from "./storage.ts";
 
 export type DeleteImagesResult = { deleted: number; stoppedBy: ImageStorageError["kind"] | null };
@@ -55,14 +55,12 @@ export async function deleteUnusedPollImagesQuietly(pollId: number, urls: string
       .from(pollImages)
       .where(and(eq(pollImages.pollId, pollId), inArray(pollImages.url, urls), isNull(pollImages.deletedAt)));
     if (candidates.length === 0) return;
-    const stillUsed = new Set(
-      (
-        await db
-          .select({ url: questions.imageUrl })
-          .from(questions)
-          .where(inArray(questions.imageUrl, candidates.map((row) => row.url)))
-      ).map((row) => row.url)
-    );
+    const candidateUrls = candidates.map((row) => row.url);
+    const stillUsed = new Set([
+      ...(await db.select({ url: questions.imageUrl }).from(questions).where(inArray(questions.imageUrl, candidateUrls))).map((row) => row.url),
+      // Pozadí prezentace (i kopie pro nový běh).
+      ...(await db.select({ url: polls.backgroundImageUrl }).from(polls).where(inArray(polls.backgroundImageUrl, candidateUrls))).map((row) => row.url),
+    ]);
     await deletePollImageRows(
       storage,
       candidates.filter((row) => !stillUsed.has(row.url))

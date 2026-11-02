@@ -1,5 +1,5 @@
 import { questions } from "../../db/schema.ts";
-import type { PublicQuestionLink, QuestionImage, QuestionLink } from "./types.ts";
+import type { BackgroundImage, PublicQuestionLink, QuestionImage, QuestionLink } from "./types.ts";
 
 // Sloupce obrázku a odkazu pro `db.select({...})` — jedno místo, aby
 // všechny pohledy (moderátor, účastník, editor, výsledky) četly totéž.
@@ -26,6 +26,16 @@ type MediaRow = {
 export function toQuestionImage(row: MediaRow): QuestionImage | null {
   if (!row.imageUrl || !row.imageWidth || !row.imageHeight) return null;
   return { url: row.imageUrl, width: row.imageWidth, height: row.imageHeight, alt: row.imageAlt };
+}
+
+/** Pozadí prezentace z řádku pollu (polls.background_image_*). */
+export function toBackgroundImage(row: {
+  backgroundImageUrl: string | null;
+  backgroundImageWidth: number | null;
+  backgroundImageHeight: number | null;
+}): BackgroundImage | null {
+  if (!row.backgroundImageUrl || !row.backgroundImageWidth || !row.backgroundImageHeight) return null;
+  return { url: row.backgroundImageUrl, width: row.backgroundImageWidth, height: row.backgroundImageHeight };
 }
 
 export function toQuestionLink(row: MediaRow): QuestionLink | null {

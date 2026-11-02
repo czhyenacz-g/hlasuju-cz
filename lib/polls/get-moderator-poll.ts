@@ -4,7 +4,7 @@ import { getDb } from "../../db/index.ts";
 import { options, participants, polls, questions, votes } from "../../db/schema.ts";
 import { computeLeaderboard } from "./leaderboard.ts";
 import { LIMITS } from "./limits.ts";
-import { questionMediaColumns, toQuestionImage, toQuestionLink } from "./question-media.ts";
+import { questionMediaColumns, toBackgroundImage, toQuestionImage, toQuestionLink } from "./question-media.ts";
 import { isEmailConfigured } from "../email/send-email.ts";
 import { maskEmail, RESULTS_EMAIL_MAX_SENDS } from "./send-results-email.ts";
 import type { ModeratorPollView, ModeratorQuestionView } from "./types.ts";
@@ -30,6 +30,9 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       mode: polls.mode,
       resultsEmailSentAt: polls.resultsEmailSentAt,
       resultsEmailCount: polls.resultsEmailCount,
+      backgroundImageUrl: polls.backgroundImageUrl,
+      backgroundImageWidth: polls.backgroundImageWidth,
+      backgroundImageHeight: polls.backgroundImageHeight,
     })
     .from(polls)
     .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
@@ -114,6 +117,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
     mode: poll.mode as ModeratorPollView["mode"],
     pollStatus: poll.status as ModeratorPollView["pollStatus"],
     activeQuestionId: poll.activeQuestionId,
+    backgroundImage: toBackgroundImage(poll),
     questions: questionViews,
     totalVotes: questionViews.reduce((sum, q) => sum + q.totalVotes, 0),
     uniqueParticipants,

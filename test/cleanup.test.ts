@@ -80,6 +80,28 @@ describe("úklid obrázků (podle evidence poll_images) a rate limitů", () => {
     assert.ok(expiredRow.deletedAt);
   });
 
+  test("obrázek pozadí: starý nepoužitý se smaže, používaný (i platnou kopií po expiraci originálu) zůstane", async () => {
+    const { body: created } = await createPoll();
+    const { pollId, content } = await pollIdOf(created.moderatorToken);
+    const background = await addImage(pollId, 48);
+    assert.equal(
+      (await putContent(created.moderatorToken, { ...contentToPayload(content), backgroundImage: { url: background.url, width: 10, height: 10 } })).response.status,
+      200
+    );
+    // Originál expiroval, kopie (nový běh) pozadí dál používá.
+    const { body: copy } = await createPoll();
+    const { pollId: copyId } = await pollIdOf(copy.moderatorToken);
+    await testDb.db.update(polls).set({ backgroundImageUrl: background.url, backgroundImageWidth: 10, backgroundImageHeight: 10 }).where(eq(polls.id, copyId));
+    await testDb.db.update(polls).set({ expiresAt: new Date(Date.now() - 8 * 24 * 3600_000) }).where(eq(polls.id, pollId));
+    await runCleanup();
+    assert.equal(isLive(background.id), true, "orphan větev: pozadí se počítá jako použití");
+
+    // Kopie taky expirovala → teď se smaže.
+    await testDb.db.update(polls).set({ expiresAt: new Date(Date.now() - 8 * 24 * 3600_000) }).where(eq(polls.id, copyId));
+    await runCleanup();
+    assert.equal(isLive(background.id), false);
+  });
+
   test("rate limit Content API: úklid se zastaví a zbytek dokončí příští běh", async () => {
     const { body: created } = await createPoll();
     const { pollId } = await pollIdOf(created.moderatorToken);

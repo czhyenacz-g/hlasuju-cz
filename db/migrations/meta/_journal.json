@@ -64,6 +64,13 @@
       "when": 1793645497899,
       "tag": "0008_speed_bonus",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793647808995,
+      "tag": "0009_background_image",
+      "breakpoints": true
     }
   ]
 }

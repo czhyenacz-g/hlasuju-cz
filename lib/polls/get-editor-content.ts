@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions, votes } from "../../db/schema.ts";
-import { questionMediaColumns, toQuestionImage, toQuestionLink } from "./question-media.ts";
+import { questionMediaColumns, toBackgroundImage, toQuestionImage, toQuestionLink } from "./question-media.ts";
 import { isQuestionLocked } from "./update-poll-content.ts";
 import type { EditorContent, EditorQuestion, PollStatus, QuestionStatus } from "./types.ts";
 
@@ -11,7 +11,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
   const db = getDb();
 
   const [poll] = await db
-    .select({ id: polls.id, title: polls.title, publicCode: polls.publicCode, status: polls.status, version: polls.version, mode: polls.mode, requireParticipantName: polls.requireParticipantName })
+    .select({ id: polls.id, title: polls.title, publicCode: polls.publicCode, status: polls.status, version: polls.version, mode: polls.mode, requireParticipantName: polls.requireParticipantName, backgroundImageUrl: polls.backgroundImageUrl, backgroundImageWidth: polls.backgroundImageWidth, backgroundImageHeight: polls.backgroundImageHeight })
     .from(polls)
     .where(and(eq(polls.moderatorToken, moderatorToken), gt(polls.expiresAt, new Date())))
     .limit(1);
@@ -60,6 +60,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
   return {
     publicCode: poll.publicCode,
     title: poll.title,
+    backgroundImage: toBackgroundImage(poll),
     pollStatus: poll.status as PollStatus,
     mode: poll.mode as EditorContent["mode"],
     requireParticipantName: poll.requireParticipantName,

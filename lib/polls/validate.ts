@@ -413,5 +413,15 @@ export function validateUpdatePollInput(input: unknown): UpdateValidationResult 
   const questions = validateQuestions(body.questions, "update");
   if (!questions.ok) return questions;
 
-  return { ok: true, value: { version: body.version, title: title.value, questions: questions.value } };
+  let backgroundImage: UpdatePollInput["backgroundImage"];
+  if (body.backgroundImage !== undefined) {
+    const image = validateImageInput(body.backgroundImage);
+    if (!image.ok) return { ok: false, error: `Pozadí prezentace: ${image.error}` };
+    backgroundImage = image.value ? { url: image.value.url, width: image.value.width, height: image.value.height } : null;
+  }
+
+  return {
+    ok: true,
+    value: { version: body.version, title: title.value, questions: questions.value, ...(backgroundImage === undefined ? {} : { backgroundImage }) },
+  };
 }

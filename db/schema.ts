@@ -47,6 +47,12 @@ export const polls = pgTable(
     // "self_service" = veřejná anketa pro web: jedna otázka, hlasuje se
     // hned od vytvoření bez moderátora. Nastavuje se jen při vytvoření.
     mode: varchar("mode", { length: 20 }).notNull().default("live"),
+    // Obrázek na pozadí promítání (celá prezentace, jen plátno — účastníci
+    // ho nedostávají). Jen obrázek nahraný do tohoto hlasování (poll_images)
+    // nebo převzatý z originálu při novém běhu (duplicate-poll.ts).
+    backgroundImageUrl: varchar("background_image_url", { length: 1000 }),
+    backgroundImageWidth: integer("background_image_width"),
+    backgroundImageHeight: integer("background_image_height"),
   },
   (table) => [
     uniqueIndex("polls_public_code_unique").on(table.publicCode),

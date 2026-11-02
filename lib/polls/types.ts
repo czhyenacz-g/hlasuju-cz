@@ -58,9 +58,14 @@ export type UpdatePollQuestionInput = {
   points?: number;
   speedBonus?: boolean;
 };
+/** Obrázek na pozadí promítání (bez popisu — je dekorativní). */
+export type BackgroundImage = { url: string; width: number; height: number };
+
 export type UpdatePollInput = {
   version: number;
   title?: string;
+  /** undefined = beze změny (starší klient), null = odebrat. */
+  backgroundImage?: BackgroundImage | null;
   questions: UpdatePollQuestionInput[];
 };
 
@@ -143,6 +148,8 @@ export type ModeratorPollView = {
   mode: PollMode;
   pollStatus: PollStatus;
   activeQuestionId: number | null;
+  /** Jen pro plátno; veřejný pohled ho neposílá. */
+  backgroundImage: BackgroundImage | null;
   questions: ModeratorQuestionView[];
   totalVotes: number;
   uniqueParticipants: number;
@@ -176,6 +183,7 @@ export type EditorContent = {
   /** Žebříček ukazuje jména jen u jmenovitého hlasování. */
   requireParticipantName: boolean;
   version: number;
+  backgroundImage: BackgroundImage | null;
   questions: EditorQuestion[];
 };
 
