@@ -4,6 +4,7 @@ import PollEditor from "./PollEditor.tsx";
 import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx";
 import VotingBackdrop from "../../components/VotingBackdrop.tsx";
 import { isImageStorageConfigured } from "../../lib/images/storage.ts";
+import Logo from "../../components/Logo.tsx";
 
 export const metadata: Metadata = {
   title: "Vytvořit hlasování",
@@ -13,8 +14,8 @@ export default function CreatePollPage() {
   return (
     <main className="relative mx-auto min-h-screen max-w-3xl px-4 py-8 sm:py-12">
       <VotingBackdrop />
-      <Link href="/" className="text-lg font-bold tracking-tight text-brand hover:text-brand-dark">
-        hlasuju.cz
+      <Link href="/" className="inline-flex rounded-lg hover:opacity-80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20">
+        <Logo />
       </Link>
       <h1 className="mt-6 text-3xl font-bold tracking-tight text-gray-900">Vytvořit hlasování</h1>
       <p className="mt-2 text-gray-600">

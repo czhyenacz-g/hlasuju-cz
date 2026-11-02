@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AlphegaAffiliateBanner from "../components/AlphegaAffiliateBanner.tsx";
 import VotingBackdrop from "../components/VotingBackdrop.tsx";
+import Logo from "../components/Logo.tsx";
 import HomeJoinForm from "./HomeJoinForm.tsx";
 
 const BENEFITS = [
@@ -15,7 +16,9 @@ export default function Home() {
       <VotingBackdrop />
 
       <div className="w-full max-w-4xl">
-        <p className="text-center text-lg font-bold tracking-tight text-brand">hlasuju.cz</p>
+        <div className="flex justify-center">
+          <Logo />
+        </div>
 
         <div className="mx-auto mt-5 max-w-3xl text-balance text-center sm:mt-10">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl">Hlasování, které zapojí každého.</h1>
@@ -71,7 +74,18 @@ export default function Home() {
           ))}
         </ul>
 
-        <div className="mx-auto mt-12 max-w-2xl sm:mt-16">
+        <div className="mx-auto mt-12 grid max-w-2xl gap-4 sm:mt-16">
+          <a
+            href="https://nechcivolit.cz/"
+            target="_blank"
+            rel="noopener"
+            className="group block rounded-3xl border border-gray-200 bg-white/80 p-5 transition hover:border-brand/40 hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 sm:p-6"
+          >
+            <p className="text-balance text-base font-semibold text-gray-900 sm:text-lg">
+              Demokracie nekončí u voleb, ale začíná s nimi. Politici nedostávají bianco šek, aby mohli dělat cokoliv si zlíbí!
+            </p>
+            <p className="mt-2 text-sm font-semibold text-brand-dark group-hover:underline">nechcivolit.cz →</p>
+          </a>
           <AlphegaAffiliateBanner variant="standard" />
         </div>
       </div>

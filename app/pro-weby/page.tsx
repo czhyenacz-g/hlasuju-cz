@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import VotingBackdrop from "../../components/VotingBackdrop.tsx";
 import { SITE_NAME, SITE_URL } from "../config/site.ts";
+import Logo from "../../components/Logo.tsx";
 
 const TITLE = "Hlasování a ankety pro váš web";
 const DESCRIPTION = "Vytvořte anketu, sdílejte odkaz nebo ji vložte přímo na své stránky. Bez registrace a bez programování.";
@@ -24,8 +25,8 @@ export default function ForWebsitesPage() {
   return (
     <main className="relative mx-auto min-h-screen max-w-4xl px-4 py-8 sm:py-14">
       <VotingBackdrop />
-      <Link href="/" className="text-lg font-bold tracking-tight text-brand hover:text-brand-dark">
-        hlasuju.cz
+      <Link href="/" className="inline-flex rounded-lg hover:opacity-80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20">
+        <Logo />
       </Link>
 
       <header className="mx-auto mt-8 max-w-2xl text-balance text-center sm:mt-12">

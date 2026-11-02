@@ -8,6 +8,7 @@ import ShareButtons from "../../components/ShareButtons.tsx";
 import { getSharePreview, pollExistsByPublicCode } from "../../lib/polls/find-poll.ts";
 import { pollPageMetadata } from "../../lib/polls/share-metadata.ts";
 import { SITE_URL } from "../config/site.ts";
+import Logo from "../../components/Logo.tsx";
 
 type Params = { params: Promise<{ publicCode: string }> };
 
@@ -25,8 +26,8 @@ export default async function ParticipantPage({ params }: Params) {
   if (preview) {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col px-4 py-6 sm:py-10">
-        <Link href="/" className="text-lg font-bold tracking-tight text-brand hover:text-brand-dark">
-          hlasuju.cz
+        <Link href="/" className="inline-flex rounded-lg hover:opacity-80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20">
+          <Logo />
         </Link>
         <section className="mt-5 rounded-3xl border border-gray-200 bg-white p-5 shadow-soft sm:p-8">
           <PublicPoll publicCode={publicCode} />
