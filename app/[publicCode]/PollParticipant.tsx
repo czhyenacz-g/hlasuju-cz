@@ -44,26 +44,57 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   const [voteError, setVoteError] = useState<string | null>(null);
   const [participantName, setParticipantName] = useState<string | null>(null);
 
+  // Hlasy odeslané z tohoto zařízení během běžícího načítání stavu — ty
+  // odpověď serveru nesmí přepsat (mohla vzniknout dřív než zápis hlasu).
+  const castDuringSyncRef = useRef<Record<string, number>>({});
+  const syncControllerRef = useRef<AbortController | null>(null);
+
+  /**
+   * Srovná vlastní hlasy a jméno se serverem (zdroj pravdy). Volá se po
+   * načtení stránky, při každé změně slajdu a po návratu do aplikace —
+   * moderátor mohl prezentaci vynulovat („Znovu od začátku“,
+   * reset-poll.ts), pak tu nesmí zůstat starý „Hlas byl zaznamenán“.
+   */
+  const syncWithServer = useCallback(
+    (id: string) => {
+      syncControllerRef.current?.abort();
+      const controller = new AbortController();
+      syncControllerRef.current = controller;
+      castDuringSyncRef.current = {};
+      fetch(`/api/polls/public/${publicCode}/participant?participantId=${encodeURIComponent(id)}`, { signal: controller.signal, cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((state: { name: string | null; votes: Record<string, number> } | null) => {
+          if (!state || controller.signal.aborted) return;
+          setMyVotes({ ...state.votes, ...castDuringSyncRef.current });
+          if (state.name) {
+            storeName(publicCode, state.name);
+            setParticipantName(state.name);
+          } else {
+            // Server jméno nezná (vynulováno / smazáno) — zeptat se znovu.
+            storeName(publicCode, null);
+            setParticipantName(null);
+          }
+        })
+        .catch(() => {});
+    },
+    [publicCode]
+  );
+
   useEffect(() => {
     const id = getOrCreateParticipantId();
     setParticipantId(id);
     setParticipantName(readStoredName(publicCode));
-    // Obnovit stav po reloadu (best effort — bez něj se jen znovu ukáže formulář).
-    const controller = new AbortController();
-    fetch(`/api/polls/public/${publicCode}/participant?participantId=${encodeURIComponent(id)}`, { signal: controller.signal, cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((state: { name: string | null; votes: Record<string, number> } | null) => {
-        if (!state) return;
-        // Server má přednost — první uložená odpověď je ta platná.
-        setMyVotes((current) => ({ ...current, ...state.votes }));
-        if (state.name) {
-          storeName(publicCode, state.name);
-          setParticipantName(state.name);
-        }
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [publicCode]);
+    syncWithServer(id);
+    // Telefon mohl spát (polling stál) a mezitím se prezentace vynulovala.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") syncWithServer(id);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      syncControllerRef.current?.abort();
+    };
+  }, [publicCode, syncWithServer]);
 
   const fetcher = useCallback(
     async (signal: AbortSignal) => {
@@ -88,41 +119,16 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
     setVoteError(null);
   }, [activeQuestionId]);
 
-  // Při každé změně slajdu srovnat vlastní hlasy a jméno se serverem —
-  // moderátor mohl prezentaci vynulovat („Znovu od začátku“, reset-poll.ts),
-  // pak by tu jinak zůstal starý „Hlas byl zaznamenán“ a staré jméno.
+  // Při každé změně slajdu srovnat stav se serverem (viz syncWithServer).
   const activeSlideKey = data && !data.notFound ? `${data.poll.pollStatus}:${activeQuestionId}:${slide?.kind ?? ""}:${closedQuestion?.id ?? ""}` : null;
-  const firstSyncRef = useRef(true);
+  const lastSyncedKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!participantId || activeSlideKey === null) return;
-    if (firstSyncRef.current) {
-      // Úvodní načtení obstarává efekt výše.
-      firstSyncRef.current = false;
-      return;
-    }
-    const controller = new AbortController();
-    const syncedQuestionId = activeQuestionId;
-    fetch(`/api/polls/public/${publicCode}/participant?participantId=${encodeURIComponent(participantId)}`, { signal: controller.signal, cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((state: { name: string | null; votes: Record<string, number> } | null) => {
-        if (!state) return;
-        // Server je zdroj pravdy; jen hlas právě odeslaný k aktuální otázce
-        // (mohl předběhnout tuhle odpověď) se ponechá.
-        setMyVotes((current) => {
-          const next = { ...state.votes };
-          const key = String(syncedQuestionId);
-          if (syncedQuestionId !== null && current[key] !== undefined && next[key] === undefined) next[key] = current[key];
-          return next;
-        });
-        if (!state.name) {
-          storeName(publicCode, null);
-          setParticipantName(null);
-        }
-      })
-      .catch(() => {});
-    return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jen při změně slajdu
-  }, [activeSlideKey, participantId, publicCode]);
+    const previous = lastSyncedKeyRef.current;
+    lastSyncedKeyRef.current = activeSlideKey;
+    // První stav po načtení už pokrylo úvodní načtení.
+    if (previous !== null && previous !== activeSlideKey) syncWithServer(participantId);
+  }, [activeSlideKey, participantId, syncWithServer]);
 
   async function castVote(optionId: number) {
     if (!activeQuestion || !participantId || voting) return;
@@ -146,6 +152,7 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
         return;
       }
       const questionId = activeQuestion.id;
+      castDuringSyncRef.current[String(questionId)] = optionId;
       setMyVotes((current) => ({ ...current, [String(questionId)]: current[String(questionId)] ?? optionId }));
     } catch {
       setVoteError("Hlas se nepodařilo zaznamenat. Zkuste to prosím znovu.");

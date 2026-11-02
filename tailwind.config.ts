@@ -6,6 +6,12 @@ export default {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  future: {
+    // `hover:` jen na zařízeních, která hover opravdu mají. Na dotykových
+    // telefonech po klepnutí :hover „ulpí“ na místě prstu — u další otázky
+    // pak odpověď na stejném místě vypadala jako předvybraná.
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
       colors: {
