@@ -229,6 +229,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
         body,
         resultsQuestionIndex,
         points: 1,
+        speedBonus: false,
       });
       continue;
     }
@@ -298,6 +299,12 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       points = q.points as number;
     }
 
+    // Bonus za rychlost má smysl jen u otázky se správnou odpovědí.
+    if (q.speedBonus !== undefined && q.speedBonus !== null && typeof q.speedBonus !== "boolean") {
+      return { ok: false, error: `${prefix}: neplatné nastavení bonusu za rychlost.` };
+    }
+    const speedBonus = q.speedBonus === true && correctOptionIndex !== null;
+
     questions.push({
       ...(id === undefined ? {} : { id }),
       kind,
@@ -309,6 +316,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       body: null,
       resultsQuestionIndex: null,
       points,
+      speedBonus,
     });
   }
 
@@ -382,6 +390,7 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
         body: q.body,
         resultsQuestionIndex: q.resultsQuestionIndex,
         points: q.points,
+        speedBonus: q.speedBonus,
       })),
     },
   };

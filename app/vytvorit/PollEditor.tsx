@@ -25,6 +25,8 @@ type QuestionDraft = {
   resultsKey: string | null;
   // Body za správnou odpověď (jen otázka se správnou odpovědí).
   points: number;
+  // Bonus +3/+2/+1 pro první tři správné odpovědi.
+  speedBonus: boolean;
   // Zamčená otázka (spuštěná / s hlasy) — v UI jen pro čtení, při
   // uložení se posílá přesně původní obsah (`original`).
   locked: boolean;
@@ -68,6 +70,7 @@ function emptyQuestion(expanded = true, kind: SlideKind = "question"): QuestionD
     body: "",
     resultsKey: null,
     points: 1,
+    speedBonus: false,
     locked: false,
     text: "",
     expanded,
@@ -99,6 +102,7 @@ function draftFromQuestion(question: EditorQuestion): QuestionDraft {
     body: question.body ?? "",
     resultsKey: question.resultsQuestionId ? `q${question.resultsQuestionId}` : null,
     points: question.points,
+    speedBonus: question.speedBonus,
     locked: question.locked,
     original: question,
     text: question.text,
@@ -166,9 +170,9 @@ function resultsIndex(question: QuestionDraft, all: QuestionDraft[]): number | n
 /** Návrh otázky → vstup pro PUT /content (zamčené otázky beze změny). */
 function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url: string; width: number; height: number }>, all: QuestionDraft[]) {
   if (question.locked && question.original) {
-    const { id, kind, text, options, image, link, correctOptionId, points } = question.original;
+    const { id, kind, text, options, image, link, correctOptionId, points, speedBonus } = question.original;
     const correctIndex = options.findIndex((option) => option.id === correctOptionId);
-    return { id, kind, text, options, image, link, correctOptionIndex: correctIndex === -1 ? null : correctIndex, points, body: null, resultsQuestionIndex: null };
+    return { id, kind, text, options, image, link, correctOptionIndex: correctIndex === -1 ? null : correctIndex, points, speedBonus, body: null, resultsQuestionIndex: null };
   }
 
   let image: QuestionImage | null = null;
@@ -192,6 +196,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
       body: question.kind === "content" ? question.body.trim() || null : null,
       resultsQuestionIndex: resultsIndex(question, all),
       points: 1,
+      speedBonus: false,
     };
   }
 
@@ -209,6 +214,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
     body: null,
     resultsQuestionIndex: null,
     points: question.points,
+    speedBonus: correctIndex !== -1 && question.speedBonus,
   };
 }
 
@@ -311,6 +317,7 @@ export default function PollEditor(props: PollEditorProps) {
         // Kopie výsledků ukazuje tutéž otázku (nikdy ne tiše jinou).
         resultsKey: source.resultsKey,
         points: source.points,
+        speedBonus: source.speedBonus,
         options: copiedOptions,
         correctKey: copiedOptions[source.options.findIndex((o) => o.key === source.correctKey)]?.key ?? null,
         // Uložený obrázek může sdílet i kopie; nenahraný se musí nahrát znovu.
@@ -449,6 +456,7 @@ export default function PollEditor(props: PollEditorProps) {
             body: payload.body,
             resultsQuestionIndex: payload.resultsQuestionIndex,
             points: payload.points,
+            speedBonus: payload.speedBonus,
           };
         }),
       }),
@@ -917,18 +925,7 @@ function QuestionCard({
                   )}
                 </p>
                 {!single && question.options.some((o) => o.key === question.correctKey) && (
-                  <label className="ml-9 flex flex-wrap items-center gap-2 rounded-xl bg-pastel-green/60 px-3 py-2 text-sm text-gray-800">
-                    <span className="font-medium">Body za správnou odpověď</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={LIMITS.MAX_POINTS}
-                      value={question.points}
-                      onChange={(e) => onChange({ points: Math.min(LIMITS.MAX_POINTS, Math.max(1, Math.round(Number(e.target.value) || 1))) })}
-                      className="w-20 rounded-lg border-2 border-gray-200 bg-white px-2 py-1 text-gray-900 focus:border-brand focus:outline-none"
-                    />
-                    <span className="text-xs text-gray-600">Správně = tolik bodů, jinak 0. Bez bonusů za rychlost a bez záporných bodů.</span>
-                  </label>
+                  <ScoringFields question={question} onChange={onChange} />
                 )}
               </div>
 
@@ -1188,7 +1185,7 @@ function slideSummary(question: QuestionDraft, all: QuestionDraft[]): { title: s
           `${question.options.length} odpovědi`,
           question.image ? "obrázek" : "",
           question.linkUrl.trim() ? "odkaz" : "",
-          correct ? `bodovaná (${question.points} b.)` : "",
+          correct ? `bodovaná (${question.points} b.${question.speedBonus ? " + bonus za rychlost" : ""})` : "",
         ]
           .filter(Boolean)
           .join(" · "),
@@ -1382,5 +1379,45 @@ function ResultsShortcut({ question, all, onAdd }: { question: QuestionDraft; al
     <button type="button" onClick={onAdd} className="self-start text-sm font-semibold text-brand hover:underline">
       + Výsledky za tuto otázku (slajd hned za ní)
     </button>
+  );
+}
+
+/** Body za správnou odpověď a volitelný bonus za rychlost (+3/+2/+1). */
+function ScoringFields({ question, onChange }: { question: QuestionDraft; onChange: (patch: Partial<QuestionDraft>) => void }) {
+  const [first, second, third] = LIMITS.SPEED_BONUS;
+  return (
+    <div className="ml-9 rounded-xl bg-pastel-green/60 px-3 py-2 text-sm text-gray-800">
+      <label className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">Body za správnou odpověď</span>
+        <input
+          type="number"
+          min={1}
+          max={LIMITS.MAX_POINTS}
+          value={question.points}
+          onChange={(e) => onChange({ points: Math.min(LIMITS.MAX_POINTS, Math.max(1, Math.round(Number(e.target.value) || 1))) })}
+          className="w-20 rounded-lg border-2 border-gray-200 bg-white px-2 py-1 text-gray-900 focus:border-brand focus:outline-none"
+        />
+      </label>
+      <label className="mt-2 flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={question.speedBonus}
+          onChange={(e) =>
+            // Se zapnutým bonusem dává smysl vyšší základ (2 + 3 = max. 5 b.).
+            onChange(e.target.checked && question.points === 1 ? { speedBonus: true, points: 2 } : { speedBonus: e.target.checked })
+          }
+          className="mt-0.5 h-4 w-4 accent-brand"
+        />
+        <span>
+          <span className="font-medium">Bonus za rychlost</span>
+          <span className="block text-xs text-gray-600">
+            {question.speedBonus
+              ? `Nejrychlejší správná odpověď ${question.points + first} b., druhá ${question.points + second} b., třetí ${question.points + third} b., ostatní správné ${question.points} b., špatně 0. Rozhoduje čas, kdy odpověď dorazí na server.`
+              : `První tři správné odpovědi získají navíc +${first}, +${second} a +${third} body.`}
+          </span>
+        </span>
+      </label>
+      {!question.speedBonus && <p className="mt-1 text-xs text-gray-600">Správně = tolik bodů, jinak 0. Záporné body nejsou.</p>}
+    </div>
   );
 }

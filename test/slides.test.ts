@@ -170,6 +170,38 @@ describe("žebříček — výpočet", () => {
     assert.equal(none.scoredQuestionsTotal, 0);
     assert.ok(none.entries.every((e) => e.points === 0 && e.rank === 1));
   });
+
+  test("bonus za rychlost: první tři SPRÁVNÉ odpovědi +3/+2/+1 podle pořadí zápisu", () => {
+    const bonusSlides = [
+      { id: 1, kind: "question" as const, position: 0, status: "ended" as const, correctOptionId: 11, points: 2, speedBonus: true },
+      { id: 2, kind: "question" as const, position: 1, status: "ended" as const, correctOptionId: 21, points: 1, speedBonus: false },
+      { id: 9, kind: "leaderboard" as const, position: 2, status: "prepared" as const, correctOptionId: null, points: 1, speedBonus: false },
+    ];
+    // Pořadí = pořadí zápisu na serveru; špatná odpověď pořadí „nespotřebuje“.
+    const ordered = [
+      { participantId: "wrong", questionId: 1, optionId: 12 },
+      { participantId: "first", questionId: 1, optionId: 11 },
+      { participantId: "second", questionId: 1, optionId: 11 },
+      { participantId: "third", questionId: 1, optionId: 11 },
+      { participantId: "fourth", questionId: 1, optionId: 11 },
+      // Otázka bez bonusu: pořadí nehraje roli.
+      { participantId: "fourth", questionId: 2, optionId: 21 },
+      { participantId: "first", questionId: 2, optionId: 22 },
+    ];
+    const view = computeLeaderboard(bonusSlides, 2, ordered, (id) => id);
+    assert.deepEqual(
+      view.entries.map((e) => [e.rank, e.label, e.points]),
+      [
+        [1, "first", 5],
+        [2, "second", 4],
+        [3, "fourth", 3],
+        [3, "third", 3],
+        [5, "wrong", 0],
+      ]
+    );
+    // Max = 2 + 3 (bonus pro nejrychlejšího) + 1.
+    assert.equal(view.maxPoints, 6);
+  });
 });
 
 describe("prezentace — průchod tlačítkem Další", () => {
@@ -386,6 +418,72 @@ async function reset(token: string) {
   return { response, body: await response.json() };
 }
 
+describe("bonus za rychlost — prezentace", () => {
+  test("uloží se, započítá podle pořadí hlasů, ukáže nejrychlejší, zamkne se po spuštění a přenese do nového běhu", async () => {
+    const { response, body } = await createPoll({
+      title: "Kvíz",
+      requireParticipantName: true,
+      questions: [
+        { text: "2 + 2?", options: [{ text: "3" }, { text: "4" }], correctOptionIndex: 1, points: 2, speedBonus: true },
+        // Bez správné odpovědi se bonus tiše nepoužije.
+        { text: "Názor?", options: [{ text: "A" }, { text: "B" }], speedBonus: true },
+        { kind: "leaderboard", text: "Pořadí" },
+      ],
+    });
+    assert.equal(response.status, 201, JSON.stringify(body));
+    const token = body.moderatorToken as string;
+    const code = body.publicCode as string;
+    let slides = (await getModerator(token)).body.questions as (ModSlide & { speedBonus: boolean; fastest: unknown })[];
+    assert.equal(slides[0].speedBonus, true);
+    assert.equal(slides[1].speedBonus, false);
+
+    for (const [id, name] of [["w", "Vojta"], ["a", "Anna"], ["b", "Bert"], ["c", "Cyril"], ["d", "Dana"]]) await register(code, id, name);
+    await next(token, null, slides[0]);
+    // Sekvenčně = deterministické pořadí zápisu.
+    await vote(code, slides[0].id, slides[0].options[0].id, "w");
+    for (const id of ["a", "b", "c", "d"]) await vote(code, slides[0].id, slides[0].options[1].id, id);
+    // Během odpovídání se nejrychlejší neukazují.
+    assert.equal(((await getModerator(token)).body.questions[0] as { fastest: unknown }).fastest, null);
+    await next(token, slides[0], slides[2]);
+
+    slides = (await getModerator(token)).body.questions;
+    assert.deepEqual(slides[0].fastest, [
+      { label: "Anna", bonus: 3 },
+      { label: "Bert", bonus: 2 },
+      { label: "Cyril", bonus: 1 },
+    ]);
+    assert.deepEqual(
+      slides[2].leaderboard?.entries.map((e) => [e.rank, e.label, e.points]),
+      [
+        [1, "Anna", 5],
+        [2, "Bert", 4],
+        [3, "Cyril", 3],
+        [4, "Dana", 2],
+        [5, "Vojta", 0],
+      ]
+    );
+    // Účastník nedostane seznam nejrychlejších ani nastavení bodů.
+    const pub = await getPublic(code);
+    assert.ok(!pub.text.includes("fastest") && !pub.text.includes("speedBonus"));
+
+    // Po spuštění otázky bonus nejde vypnout (změnil by žebříček zpětně).
+    const payload = withSlides((await getContent(token)).body);
+    assert.equal(payload.questions[0].speedBonus, true);
+    payload.questions[0].speedBonus = false;
+    assert.equal((await putContent(token, payload)).response.status, 409);
+
+    const copy = await (await duplicateRoute.POST(jsonRequest("/x", "POST") as never, routeParams({ moderatorToken: token }))).json();
+    assert.equal((await getModerator(copy.moderatorToken)).body.questions[0].speedBonus, true);
+  });
+
+  test("neplatná hodnota bonusu se odmítne; staré otázky mají bonus vypnutý", async () => {
+    const bad = await createPoll({ questions: [{ text: "Q?", options: [{ text: "A" }, { text: "B" }], correctOptionIndex: 0, speedBonus: "ano" }] });
+    assert.equal(bad.response.status, 400);
+    const { slides } = await createDeck();
+    assert.ok(slides.every((s) => (s as unknown as { speedBonus: boolean }).speedBonus === false));
+  });
+});
+
 describe("znovu od začátku (vynulování)", () => {
   test("smaže hlasy, body i jména, vrátí otázky na začátek — i po ukončení; kód a odkaz zůstanou", async () => {
     const { token, code, slides } = await createDeck({ requireParticipantName: true });
@@ -541,6 +639,7 @@ function withSlides(content: {
         kind: source.kind,
         body: source.body,
         points: source.points,
+        speedBonus: (source as { speedBonus?: boolean }).speedBonus ?? false,
         link: isQuestion ? q.link : null,
         correctOptionIndex: isQuestion ? q.correctOptionIndex : null,
         resultsQuestionIndex: source.resultsQuestionId === null ? null : (indexById.get(source.resultsQuestionId) ?? null),

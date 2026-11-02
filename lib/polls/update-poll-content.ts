@@ -18,6 +18,7 @@ type ExistingQuestion = {
   text: string;
   body: string | null;
   points: number;
+  speedBonus: boolean;
   status: QuestionStatus;
   imageUrl: string | null;
   imageAlt: string | null;
@@ -57,7 +58,7 @@ function sameLockedContent(existing: ExistingQuestion, input: UpdatePollQuestion
     // Správná odpověď spuštěné otázky je zamčená stejně jako odpovědi.
     existing.correctOptionId === (input.correctOptionIndex === null ? null : (input.options[input.correctOptionIndex]?.id ?? null)) &&
     // Body už odehrané otázky by zpětně změnily žebříček.
-    (existing.correctOptionId === null || existing.points === (input.points ?? 1))
+    (existing.correctOptionId === null || (existing.points === (input.points ?? 1) && existing.speedBonus === (input.speedBonus ?? false)))
   );
 }
 
@@ -67,6 +68,7 @@ function questionColumns(input: UpdatePollQuestionInput, position: number) {
     text: input.text,
     body: input.body ?? null,
     points: input.points ?? 1,
+    speedBonus: input.speedBonus ?? false,
     position,
     imageUrl: input.image?.url ?? null,
     imageWidth: input.image?.width ?? null,
@@ -119,6 +121,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         kind: questions.kind,
         body: questions.body,
         points: questions.points,
+        speedBonus: questions.speedBonus,
         ...questionMediaColumns,
       })
       .from(questions)
@@ -158,6 +161,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         text: row.text,
         body: row.body,
         points: row.points,
+        speedBonus: row.speedBonus,
         status: row.status as QuestionStatus,
         imageUrl: row.imageUrl,
         imageAlt: row.imageAlt,

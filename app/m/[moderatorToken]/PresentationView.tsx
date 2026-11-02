@@ -284,14 +284,17 @@ function QuestionSlide({ slide, showResults }: { slide: ModeratorQuestionView; s
 
         <div className="flex min-w-0 flex-col gap-6">
           {showResults ? (
-            <ResultsBarChart
-              options={slide.options}
-              totalVotes={slide.totalVotes}
-              // Vyhodnocení až po uzavření otázky — během odpovídání (i po
-              // znovuotevření) se správná odpověď na plátně neukáže.
-              correctOptionId={slide.status === "ended" ? slide.correctOptionId : null}
-              large
-            />
+            <>
+              <ResultsBarChart
+                options={slide.options}
+                totalVotes={slide.totalVotes}
+                // Vyhodnocení až po uzavření otázky — během odpovídání (i po
+                // znovuotevření) se správná odpověď na plátně neukáže.
+                correctOptionId={slide.status === "ended" ? slide.correctOptionId : null}
+                large
+              />
+              <FastestList fastest={slide.fastest} />
+            </>
           ) : (
             <ol className="flex flex-col gap-3 lg:gap-4">
               {slide.options.map((option, index) => (
@@ -373,6 +376,7 @@ function ResultsSlide({ slide, poll }: { slide: ModeratorQuestionView; poll: Mod
           correctOptionId={question.status === "ended" ? question.correctOptionId : null}
           large
         />
+        <FastestList fastest={question.fastest} />
       </div>
     );
   }
@@ -391,6 +395,22 @@ function ResultsSlide({ slide, poll }: { slide: ModeratorQuestionView; poll: Mod
       </div>
       <div className="flex flex-1 flex-col justify-center">{content}</div>
     </div>
+  );
+}
+
+/** Bonus za rychlost: kdo odpověděl správně nejrychleji (jen po uzavření otázky). */
+function FastestList({ fastest }: { fastest: ModeratorQuestionView["fastest"] }) {
+  if (!fastest || fastest.length === 0) return null;
+  return (
+    <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-lg text-gray-700 lg:text-2xl">
+      <span className="font-semibold text-amber-700">⚡ Nejrychlejší správně:</span>
+      {fastest.map((entry, index) => (
+        <span key={index}>
+          {index + 1}. <span className="font-semibold text-gray-900">{entry.label}</span>{" "}
+          <span className="text-amber-700">+{entry.bonus}</span>
+        </span>
+      ))}
+    </p>
   );
 }
 

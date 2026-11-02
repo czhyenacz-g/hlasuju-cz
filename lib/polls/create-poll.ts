@@ -54,6 +54,7 @@ export async function createPoll(input: CreatePollInput): Promise<CreatePollResu
               text: question.text,
               body: question.body ?? null,
               points: question.points ?? 1,
+              speedBonus: question.speedBonus ?? false,
               position: index,
               // Veřejná anketa přijímá hlasy hned po vytvoření.
               status: input.mode === "self_service" ? "active" : "prepared",

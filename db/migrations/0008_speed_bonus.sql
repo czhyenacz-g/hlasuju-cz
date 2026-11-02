@@ -1,0 +1,1 @@
+ALTER TABLE "questions" ADD COLUMN "speed_bonus" boolean DEFAULT false NOT NULL;

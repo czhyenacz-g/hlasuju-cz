@@ -54,6 +54,7 @@ export async function duplicatePoll(moderatorToken: string): Promise<DuplicatePo
       text: slide.text,
       body: slide.body,
       points: slide.points,
+      speedBonus: slide.speedBonus,
       options: slideOptions.map((option) => ({ text: option.text })),
       link: slide.linkUrl ? { url: slide.linkUrl, label: slide.linkLabel, showDuringVoting: slide.linkShowDuringVoting } : null,
       correctOptionIndex: correctIndex === -1 ? null : correctIndex,

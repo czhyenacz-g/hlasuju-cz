@@ -1,3 +1,4 @@
+import { LIMITS } from "./limits.ts";
 import type { LeaderboardEntry, LeaderboardView, QuestionStatus, SlideKind } from "./types.ts";
 
 export type LeaderboardSlide = {
@@ -7,6 +8,7 @@ export type LeaderboardSlide = {
   status: QuestionStatus;
   correctOptionId: number | null;
   points: number;
+  speedBonus: boolean;
 };
 export type LeaderboardVote = { participantId: string; questionId: number; optionId: number };
 
@@ -19,9 +21,12 @@ export type LeaderboardVote = { participantId: string; questionId: number; optio
  *   nikdy nepromítnou, ani když se prezentující vrátí zpět.
  * - Započítají se jen otázky uzavřené v tomto běhu (status "ended");
  *   otevřená nebo neodehraná otázka zatím 0 bodů.
- * - Správně = body otázky, jinak 0. Žádné bonusy za rychlost ani záporné body.
- *   Hlas je jeden na otázku a účastníka (unique index), takže se nic
- *   nepřičte dvakrát.
+ * - Správně = body otázky, jinak 0. Žádné záporné body. Hlas je jeden na
+ *   otázku a účastníka (unique index), takže se nic nepřičte dvakrát.
+ * - Bonus za rychlost (speedBonus): první tři SPRÁVNÉ odpovědi dostanou
+ *   navíc LIMITS.SPEED_BONUS (+3/+2/+1). Pořadí = pořadí hlasů v `votes`,
+ *   které musí přijít seřazené podle času zápisu na serveru (created_at, id)
+ *   — hodiny telefonu do toho nevstupují.
  * - Účastníci: všichni, kdo hlasovali u některé otázky před žebříčkem,
  *   a u jmenovitého hlasování i ti, kdo zadali jméno. Shodné body = shodné
  *   umístění („1, 2, 2, 4“).
@@ -40,10 +45,16 @@ export function computeLeaderboard(
 
   const totals = new Map<string, number>();
   for (const participantId of registered) totals.set(participantId, 0);
+  const correctSoFar = new Map<number, number>();
   for (const vote of votes) {
     if (!beforeIds.has(vote.questionId)) continue;
     const question = scored.get(vote.questionId);
-    const gained = question && vote.optionId === question.correctOptionId ? question.points : 0;
+    let gained = 0;
+    if (question && vote.optionId === question.correctOptionId) {
+      const order = correctSoFar.get(question.id) ?? 0;
+      correctSoFar.set(question.id, order + 1);
+      gained = question.points + (question.speedBonus ? (LIMITS.SPEED_BONUS[order] ?? 0) : 0);
+    }
     totals.set(vote.participantId, (totals.get(vote.participantId) ?? 0) + gained);
   }
 
@@ -62,6 +73,11 @@ export function computeLeaderboard(
     entries,
     scoredQuestions: scored.size,
     scoredQuestionsTotal: scoredAll.length,
-    maxPoints: [...scored.values()].reduce((sum, slide) => sum + slide.points, 0),
+    maxPoints: [...scored.values()].reduce((sum, slide) => sum + maxQuestionPoints(slide), 0),
   };
+}
+
+/** Nejvíc bodů, které jde za otázku získat (základ + bonus pro nejrychlejšího). */
+export function maxQuestionPoints(question: { points: number; speedBonus: boolean }): number {
+  return question.points + (question.speedBonus ? LIMITS.SPEED_BONUS[0] : 0);
 }

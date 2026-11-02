@@ -27,6 +27,8 @@ export type CreatePollQuestionInput = {
   resultsQuestionIndex?: number | null;
   /** Body za správnou odpověď (výchozí 1). */
   points?: number;
+  /** Bonus +3/+2/+1 pro první tři správné odpovědi (výchozí false). */
+  speedBonus?: boolean;
 };
 export type CreatePollInput = {
   title?: string;
@@ -54,6 +56,7 @@ export type UpdatePollQuestionInput = {
   /** Index cílové otázky v `questions` téhož požadavku (ID nových otázek ještě neexistují). */
   resultsQuestionIndex?: number | null;
   points?: number;
+  speedBonus?: boolean;
 };
 export type UpdatePollInput = {
   version: number;
@@ -119,6 +122,9 @@ export type ModeratorQuestionView = {
   body: string | null;
   resultsQuestionId: number | null;
   points: number;
+  speedBonus: boolean;
+  /** Jen u uzavřené otázky s bonusem za rychlost: nejrychlejší správné odpovědi. */
+  fastest: { label: string; bonus: number }[] | null;
   /** Jen u slajdu žebříčku. */
   leaderboard: LeaderboardView | null;
   position: number;
@@ -152,6 +158,7 @@ export type EditorQuestion = {
   body: string | null;
   resultsQuestionId: number | null;
   points: number;
+  speedBonus: boolean;
   status: QuestionStatus;
   locked: boolean;
   voteCount: number;

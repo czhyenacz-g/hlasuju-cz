@@ -3,6 +3,7 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, participants, polls, questions, votes } from "../../db/schema.ts";
 import { computeLeaderboard } from "./leaderboard.ts";
+import { LIMITS } from "./limits.ts";
 import { questionMediaColumns, toQuestionImage, toQuestionLink } from "./question-media.ts";
 import { isEmailConfigured } from "../email/send-email.ts";
 import { maskEmail, RESULTS_EMAIL_MAX_SENDS } from "./send-results-email.ts";
@@ -47,6 +48,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       body: questions.body,
       resultsQuestionId: questions.resultsQuestionId,
       points: questions.points,
+      speedBonus: questions.speedBonus,
       ...questionMediaColumns,
     })
     .from(questions)
@@ -75,7 +77,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
     optionsByQuestion.set(row.questionId, list);
   }
 
-  const leaderboardFor = await loadLeaderboards(poll.id, poll.requireParticipantName, questionRows);
+  const { leaderboardFor, fastestFor } = await loadLeaderboards(poll.id, poll.requireParticipantName, questionRows);
 
   const questionViews: ModeratorQuestionView[] = questionRows.map((q) => {
     const questionOptions = optionsByQuestion.get(q.id) ?? [];
@@ -86,7 +88,9 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       body: q.body,
       resultsQuestionId: q.resultsQuestionId,
       points: q.points,
+      speedBonus: q.speedBonus,
       leaderboard: q.kind === "leaderboard" ? leaderboardFor(q.position) : null,
+      fastest: q.speedBonus && q.status === "ended" && q.correctOptionId !== null ? fastestFor(q.id, q.correctOptionId) : null,
       position: q.position,
       status: q.status as ModeratorQuestionView["status"],
       image: toQuestionImage(q),
@@ -124,7 +128,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
   };
 }
 
-type SlideRow = { id: number; kind: string; position: number; status: string; correctOptionId: number | null; points: number };
+type SlideRow = { id: number; kind: string; position: number; status: string; correctOptionId: number | null; points: number; speedBonus: boolean };
 
 /**
  * Žebříčky slajdů „leaderboard“ — počítá se jen, když prezentace nějaký
@@ -132,7 +136,8 @@ type SlideRow = { id: number; kind: string; position: number; status: string; co
  * jinak „Anonymní účastník N“ podle pořadí prvního hlasu.
  */
 async function loadLeaderboards(pollId: number, named: boolean, slides: SlideRow[]) {
-  if (!slides.some((slide) => slide.kind === "leaderboard")) return () => null;
+  const needed = slides.some((slide) => slide.kind === "leaderboard" || (slide.speedBonus && slide.status === "ended"));
+  if (!needed) return { leaderboardFor: () => null, fastestFor: () => null };
   const db = getDb();
 
   const voteRows = await db
@@ -140,7 +145,8 @@ async function loadLeaderboards(pollId: number, named: boolean, slides: SlideRow
     .from(votes)
     .innerJoin(questions, eq(votes.questionId, questions.id))
     .where(eq(questions.pollId, pollId))
-    .orderBy(votes.createdAt, votes.participantId);
+    // Pořadí zápisu na serveru — určuje bonus za rychlost (leaderboard.ts).
+    .orderBy(votes.createdAt, votes.id);
   const nameRows = named
     ? await db
         .select({ participantId: participants.participantId, name: participants.name })
@@ -165,5 +171,13 @@ async function loadLeaderboards(pollId: number, named: boolean, slides: SlideRow
   };
 
   const typedSlides = slides.map((slide) => ({ ...slide, kind: slide.kind as ModeratorQuestionView["kind"], status: slide.status as ModeratorQuestionView["status"] }));
-  return (position: number) => computeLeaderboard(typedSlides, position, voteRows, labelFor, [...names.keys()]);
+  return {
+    leaderboardFor: (position: number) => computeLeaderboard(typedSlides, position, voteRows, labelFor, [...names.keys()]),
+    // Kdo dostal bonus za rychlost (pro slajd výsledků a konzoli).
+    fastestFor: (questionId: number, correctOptionId: number) =>
+      voteRows
+        .filter((vote) => vote.questionId === questionId && vote.optionId === correctOptionId)
+        .slice(0, LIMITS.SPEED_BONUS.length)
+        .map((vote, index) => ({ label: labelFor(vote.participantId), bonus: LIMITS.SPEED_BONUS[index] })),
+  };
 }

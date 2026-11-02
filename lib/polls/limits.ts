@@ -11,6 +11,8 @@ export const LIMITS = {
   SLIDE_BODY_WARN_LENGTH: 400,
   SLIDE_TITLE_WARN_LENGTH: 90,
   MAX_POINTS: 100,
+  /** Bonus za rychlost pro 1., 2. a 3. správnou odpověď. */
+  SPEED_BONUS: [3, 2, 1] as readonly number[],
   // Žebříček na plátně: kolik míst na jednu stránku.
   LEADERBOARD_PAGE_SIZE: 10,
   MIN_OPTIONS: 2,

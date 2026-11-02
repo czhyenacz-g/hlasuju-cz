@@ -95,6 +95,9 @@ export const questions = pgTable(
     resultsQuestionId: integer("results_question_id"),
     // Body za správnou odpověď (jen otázka se správnou odpovědí).
     points: integer("points").notNull().default(1),
+    // Bonus za rychlost: první tři správné odpovědi (podle času zápisu na
+    // serveru) dostanou navíc +3/+2/+1 (lib/polls/leaderboard.ts).
+    speedBonus: boolean("speed_bonus").notNull().default(false),
   },
   (table) => [index("questions_poll_id_idx").on(table.pollId)]
 );
