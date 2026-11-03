@@ -101,6 +101,36 @@ export function validateImageInput(raw: unknown): FieldResult<QuestionImage | nu
   return { ok: true, value: { url: image.url, width: image.width, height: image.height, alt } };
 }
 
+/**
+ * Obrázky slajdu: `images` (pole, max. LIMITS.MAX_IMAGES_PER_SLIDE), nebo
+ * starší tvar `image` (jeden obrázek / null) od editoru načteného před
+ * zavedením více obrázků. Prázdné pole = bez obrázku.
+ */
+function validateSlideImages(q: Record<string, unknown>): FieldResult<QuestionImage[]> {
+  if (q.images === undefined || q.images === null) {
+    const single = validateImageInput(q.image);
+    if (!single.ok) return single;
+    return { ok: true, value: single.value ? [single.value] : [] };
+  }
+  if (!Array.isArray(q.images)) return { ok: false, error: "neplatné obrázky." };
+  if (q.images.length > LIMITS.MAX_IMAGES_PER_SLIDE) {
+    return { ok: false, error: `nejvýš ${LIMITS.MAX_IMAGES_PER_SLIDE} obrázky na slajd.` };
+  }
+  const images: QuestionImage[] = [];
+  for (const raw of q.images) {
+    const image = validateImageInput(raw);
+    if (!image.ok) return image;
+    if (!image.value) return { ok: false, error: "neplatný obrázek." };
+    if (images.some((other) => other.url === image.value!.url)) return { ok: false, error: "stejný obrázek je na slajdu dvakrát." };
+    images.push(image.value);
+  }
+  return { ok: true, value: images };
+}
+
+function hasImages(q: Record<string, unknown>): boolean {
+  return (q.image !== undefined && q.image !== null) || (Array.isArray(q.images) ? q.images.length > 0 : q.images !== undefined && q.images !== null);
+}
+
 function isId(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
@@ -170,16 +200,16 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       id = q.id;
     }
 
-    let image: UpdatePollQuestionInput["image"] = null;
+    let images: QuestionImage[] = [];
     if (kind === "question" || kind === "content") {
       if (mode === "update") {
-        const validatedImage = validateImageInput(q.image);
-        if (!validatedImage.ok) return { ok: false, error: `${prefix}: ${validatedImage.error}` };
-        image = validatedImage.value;
-      } else if (q.image !== undefined && q.image !== null) {
+        const validatedImages = validateSlideImages(q);
+        if (!validatedImages.ok) return { ok: false, error: `${prefix}: ${validatedImages.error}` };
+        images = validatedImages.value;
+      } else if (hasImages(q)) {
         return { ok: false, error: `${prefix}: obrázek lze nahrát až po vytvoření hlasování.` };
       }
-    } else if (q.image !== undefined && q.image !== null) {
+    } else if (hasImages(q)) {
       return { ok: false, error: `${prefix}: tento typ slajdu nemá obrázek.` };
     }
 
@@ -201,7 +231,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
         body = validatedBody.value || null;
         // Při vytváření ještě nemůže mít obrázek (nahraje se hned potom),
         // úplně prázdný slajd hlídá editor; při ukládání už ho odmítne server.
-        if (mode === "update" && !title.value && !body && !image) {
+        if (mode === "update" && !title.value && !body && images.length === 0) {
           return { ok: false, error: `${prefix}: vyplňte nadpis, text nebo přidejte obrázek.` };
         }
       } else if (q.body !== undefined && q.body !== null && q.body !== "") {
@@ -223,7 +253,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
         kind,
         text: title.value,
         options: [],
-        image,
+        images,
         link: null,
         correctOptionIndex: null,
         body,
@@ -310,7 +340,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       kind,
       text,
       options,
-      image,
+      images,
       link: link.value,
       correctOptionIndex,
       body: null,

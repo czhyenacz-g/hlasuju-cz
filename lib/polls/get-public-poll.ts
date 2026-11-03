@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions } from "../../db/schema.ts";
-import { questionMediaColumns, toPublicLink, toQuestionImage, toQuestionLink } from "./question-media.ts";
+import { questionMediaColumns, toPublicLink, toQuestionImages, toQuestionLink } from "./question-media.ts";
 import type { PublicPollView } from "./types.ts";
 
 /**
@@ -64,7 +64,7 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
       activeQuestion = {
         id: question.id,
         text: question.text,
-        image: toQuestionImage(question),
+        images: toQuestionImages(question),
         link: link?.showDuringVoting ? toPublicLink(link) : null,
         options: questionOptions,
       };
@@ -72,7 +72,7 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
       closedQuestion = {
         id: question.id,
         text: question.text,
-        image: toQuestionImage(question),
+        images: toQuestionImages(question),
         link: toPublicLink(toQuestionLink(question)),
         options: questionOptions,
         correctOptionId: question.correctOptionId,

@@ -4,7 +4,7 @@ import { getDb } from "../../db/index.ts";
 import { options, participants, polls, questions, votes } from "../../db/schema.ts";
 import { computeLeaderboard } from "./leaderboard.ts";
 import { LIMITS } from "./limits.ts";
-import { questionMediaColumns, toBackgroundImage, toQuestionImage, toQuestionLink } from "./question-media.ts";
+import { questionMediaColumns, toBackgroundImage, toQuestionImages, toQuestionLink } from "./question-media.ts";
 import { isEmailConfigured } from "../email/send-email.ts";
 import { maskEmail, RESULTS_EMAIL_MAX_SENDS } from "./send-results-email.ts";
 import type { ModeratorPollView, ModeratorQuestionView } from "./types.ts";
@@ -96,7 +96,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       fastest: q.speedBonus && q.status === "ended" && q.correctOptionId !== null ? fastestFor(q.id, q.correctOptionId) : null,
       position: q.position,
       status: q.status as ModeratorQuestionView["status"],
-      image: toQuestionImage(q),
+      images: toQuestionImages(q),
       link: toQuestionLink(q),
       options: questionOptions,
       correctOptionId: q.correctOptionId,

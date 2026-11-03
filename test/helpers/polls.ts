@@ -77,7 +77,7 @@ export function contentToPayload(content: {
   questions: {
     id: number;
     text: string;
-    image: unknown;
+    images?: unknown[];
     link: unknown;
     options: { id: number; text: string }[];
     correctOptionId?: number | null;
@@ -92,7 +92,9 @@ export function contentToPayload(content: {
       return {
         id: q.id,
         text: q.text,
-        image: q.image,
+        // Starší tvar vstupu (jeden obrázek) — testy jím ověřují i
+        // kompatibilitu s editorem načteným před zavedením více obrázků.
+        image: q.images?.[0] ?? null,
         link: q.link,
         options: q.options,
         correctOptionIndex: correctIndex === -1 ? null : correctIndex,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import QuestionImage from "../../../components/QuestionImage.tsx";
+import { QuestionImages } from "../../../components/QuestionImage.tsx";
 import QuestionLink from "../../../components/QuestionLink.tsx";
 import ResultsBarChart, { votesLabel } from "../../../components/ResultsBarChart.tsx";
 import AlphegaAffiliateBanner from "../../../components/AlphegaAffiliateBanner.tsx";
@@ -197,9 +197,9 @@ function QuestionResultCard({ question, index, moderatorToken }: { question: Mod
       <h2 className="text-xl font-bold text-gray-900">
         {index + 1}. {question.text}
       </h2>
-      {question.image && (
+      {question.images.length > 0 && (
         <div className="mt-3">
-          <QuestionImage image={question.image} maxHeightClass="max-h-56" />
+          <QuestionImages images={question.images} maxHeightClass="max-h-56" />
         </div>
       )}
       <div className="mt-4">

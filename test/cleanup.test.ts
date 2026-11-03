@@ -102,6 +102,28 @@ describe("úklid obrázků (podle evidence poll_images) a rate limitů", () => {
     assert.equal(isLive(background.id), false);
   });
 
+  test("2. a 3. obrázek slajdu: používaný (i platnou kopií po expiraci originálu) zůstane, nepoužívaný se smaže", async () => {
+    const { body: created } = await createPoll();
+    const { pollId } = await pollIdOf(created.moderatorToken);
+    const extra = await addImage(pollId, 48);
+    const orphan = await addImage(pollId, 48);
+    const { body: copy } = await createPoll();
+    const { pollId: copyId } = await pollIdOf(copy.moderatorToken);
+    const [copyQuestion] = await testDb.db.select({ id: questions.id }).from(questions).where(eq(questions.pollId, copyId)).limit(1);
+    await testDb.db
+      .update(questions)
+      .set({ imageUrl: "https://example.invalid/first.png", imageWidth: 10, imageHeight: 10, extraImages: [{ url: extra.url, width: 10, height: 10, alt: null }] })
+      .where(eq(questions.id, copyQuestion.id));
+    await testDb.db.update(polls).set({ expiresAt: new Date(Date.now() - 8 * 24 * 3600_000) }).where(eq(polls.id, pollId));
+    await runCleanup();
+    assert.equal(isLive(extra.id), true, "extra obrázek platné kopie se nesmaže");
+    assert.equal(isLive(orphan.id), false);
+
+    await testDb.db.update(polls).set({ expiresAt: new Date(Date.now() - 8 * 24 * 3600_000) }).where(eq(polls.id, copyId));
+    await runCleanup();
+    assert.equal(isLive(extra.id), false);
+  });
+
   test("rate limit Content API: úklid se zastaví a zbytek dokončí příští běh", async () => {
     const { body: created } = await createPoll();
     const { pollId } = await pollIdOf(created.moderatorToken);

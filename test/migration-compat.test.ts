@@ -40,7 +40,7 @@ describe("migrace 0001–0007 jsou zpětně kompatibilní", () => {
     try {
       const view = await getPublicPoll("424242");
       assert.equal(view?.activeQuestion?.text, "Stará otázka");
-      assert.equal(view?.activeQuestion?.image, null);
+      assert.deepEqual(view?.activeQuestion?.images, []);
       assert.equal(view?.activeQuestion?.link, null);
 
       const moderator = await getModeratorPoll("legacy-token-legacy-token-legacy-token-abc");

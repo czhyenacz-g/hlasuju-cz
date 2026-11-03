@@ -49,7 +49,8 @@ export type UpdatePollQuestionInput = {
   kind?: SlideKind;
   text: string;
   options: UpdatePollOptionInput[];
-  image: QuestionImage | null;
+  /** 0–3 obrázky slajdu (zobrazí se vedle sebe), první = hlavní. */
+  images: QuestionImage[];
   link: QuestionLink | null;
   correctOptionIndex: number | null;
   body?: string | null;
@@ -87,7 +88,8 @@ export type PublicPollView = {
   activeQuestion: {
     id: number;
     text: string;
-    image: QuestionImage | null;
+    /** 0–3 obrázky slajdu (zobrazí se vedle sebe), první = hlavní. */
+  images: QuestionImage[];
     /** Jen pokud ho moderátor povolil ukázat už během hlasování. */
     link: PublicQuestionLink | null;
     options: { id: number; text: string }[];
@@ -95,7 +97,8 @@ export type PublicPollView = {
   closedQuestion: {
     id: number;
     text: string;
-    image: QuestionImage | null;
+    /** 0–3 obrázky slajdu (zobrazí se vedle sebe), první = hlavní. */
+  images: QuestionImage[];
     link: PublicQuestionLink | null;
     options: { id: number; text: string }[];
     /** Jen tady (otázka ukončená) — nikdy v `activeQuestion`. */
@@ -135,7 +138,8 @@ export type ModeratorQuestionView = {
   position: number;
   status: QuestionStatus;
   totalVotes: number;
-  image: QuestionImage | null;
+  /** 0–3 obrázky slajdu (zobrazí se vedle sebe), první = hlavní. */
+  images: QuestionImage[];
   link: QuestionLink | null;
   options: { id: number; text: string; votes: number }[];
   correctOptionId: number | null;
@@ -169,7 +173,8 @@ export type EditorQuestion = {
   status: QuestionStatus;
   locked: boolean;
   voteCount: number;
-  image: QuestionImage | null;
+  /** 0–3 obrázky slajdu (zobrazí se vedle sebe), první = hlavní. */
+  images: QuestionImage[];
   link: QuestionLink | null;
   options: { id: number; text: string }[];
   correctOptionId: number | null;
@@ -194,7 +199,8 @@ export type FinalResultsQuestion = {
   id: number;
   text: string;
   position: number;
-  image: QuestionImage | null;
+  /** 0–3 obrázky slajdu (zobrazí se vedle sebe), první = hlavní. */
+  images: QuestionImage[];
   link: PublicQuestionLink | null;
   options: { id: number; text: string; votes: number }[];
   correctOptionId: number | null;

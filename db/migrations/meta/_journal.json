@@ -71,6 +71,13 @@
       "when": 1793647808995,
       "tag": "0009_background_image",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793738364991,
+      "tag": "0010_extra_images",
+      "breakpoints": true
     }
   ]
 }

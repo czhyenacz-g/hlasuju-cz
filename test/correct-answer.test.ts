@@ -196,7 +196,7 @@ describe("správná odpověď — hlasování", () => {
     assert.equal((await putContent(token, payload)).response.status, 200);
 
     const { body: after } = await getContent(token);
-    assert.equal(after.questions[0].image.url, image.url);
+    assert.equal(after.questions[0].images[0].url, image.url);
     assert.equal(after.questions[0].link.url, "https://example.cz/vysvetleni");
     assert.equal(after.questions[0].correctOptionId, after.questions[0].options[1].id);
   });

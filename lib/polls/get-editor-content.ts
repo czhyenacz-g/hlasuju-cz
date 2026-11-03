@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions, votes } from "../../db/schema.ts";
-import { questionMediaColumns, toBackgroundImage, toQuestionImage, toQuestionLink } from "./question-media.ts";
+import { questionMediaColumns, toBackgroundImage, toQuestionImages, toQuestionLink } from "./question-media.ts";
 import { isQuestionLocked } from "./update-poll-content.ts";
 import type { EditorContent, EditorQuestion, PollStatus, QuestionStatus } from "./types.ts";
 
@@ -78,7 +78,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
         status: row.status as QuestionStatus,
         locked: isQuestionLocked({ status: row.status, voteCount }, poll.mode),
         voteCount,
-        image: toQuestionImage(row),
+        images: toQuestionImages(row),
         link: toQuestionLink(row),
         options: optionsByQuestion.get(row.id) ?? [],
         correctOptionId: row.correctOptionId,

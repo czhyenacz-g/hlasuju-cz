@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions, votes } from "../../db/schema.ts";
-import { questionMediaColumns, toPublicLink, toQuestionImage, toQuestionLink } from "./question-media.ts";
+import { questionMediaColumns, toPublicLink, toQuestionImages, toQuestionLink } from "./question-media.ts";
 import type { FinalResultsQuestion, FinalResultsView } from "./types.ts";
 
 export type FinalResultsResult =
@@ -95,7 +95,7 @@ export async function getFinalResults(publicCode: string, participantId: string 
       id: q.id,
       text: q.text,
       position: q.position,
-      image: toQuestionImage(q),
+      images: toQuestionImages(q),
       link: toPublicLink(toQuestionLink(q)),
       options: questionOptions,
       // Hlasování je ukončené (viz výše), všechny otázky jsou ukončené.

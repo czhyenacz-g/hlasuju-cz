@@ -84,7 +84,13 @@ export async function duplicatePoll(moderatorToken: string): Promise<DuplicatePo
     if (!slide.imageUrl) continue;
     await db
       .update(questions)
-      .set({ imageUrl: slide.imageUrl, imageWidth: slide.imageWidth, imageHeight: slide.imageHeight, imageAlt: slide.imageAlt })
+      .set({
+        imageUrl: slide.imageUrl,
+        imageWidth: slide.imageWidth,
+        imageHeight: slide.imageHeight,
+        imageAlt: slide.imageAlt,
+        extraImages: slide.extraImages,
+      })
       .where(eq(questions.id, created.questionIds[index]));
   }
 

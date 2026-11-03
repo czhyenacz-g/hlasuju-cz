@@ -113,3 +113,32 @@ function ImageLightbox({ image, alt, onClose }: { image: QuestionImageData; alt:
     </div>
   );
 }
+
+/**
+ * Obrázky slajdu (0–3) vedle sebe. Šířka se dělí podle poměru stran, takže
+ * mají všechny stejnou výšku a žádný se neořízne. Každý jde zvětšit zvlášť.
+ * Jeden obrázek = stejné chování jako QuestionImage.
+ */
+export function QuestionImages({
+  images,
+  className = "",
+  ...props
+}: {
+  images: QuestionImageData[];
+  maxHeightClass?: string;
+  className?: string;
+  priority?: boolean;
+  fitHeight?: string;
+}) {
+  if (images.length === 0) return null;
+  if (images.length === 1) return <QuestionImage image={images[0]} className={className} {...props} />;
+  return (
+    <div className={`flex items-center justify-center gap-2 sm:gap-3 ${className}`}>
+      {images.map((image) => (
+        <div key={image.url} className="min-w-0" style={{ flex: `${image.width / image.height} 1 0%` }}>
+          <QuestionImage image={image} {...props} />
+        </div>
+      ))}
+    </div>
+  );
+}

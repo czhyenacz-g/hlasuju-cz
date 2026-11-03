@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePolling } from "../../../lib/use-polling.ts";
 import QrCode from "../../../components/QrCode.tsx";
-import QuestionImage from "../../../components/QuestionImage.tsx";
+import { QuestionImages } from "../../../components/QuestionImage.tsx";
 import QuestionLink from "../../../components/QuestionLink.tsx";
 import SlideBody from "../../../components/SlideBody.tsx";
 import AlphegaAffiliateBanner from "../../../components/AlphegaAffiliateBanner.tsx";
@@ -412,9 +412,9 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
           </div>
           <h2 className="mt-2 text-xl font-bold text-gray-900">{slideTitle(question, poll.questions)}</h2>
 
-          {question.image && (
+          {question.images.length > 0 && (
             <div className="mt-4">
-              <QuestionImage image={question.image} maxHeightClass="max-h-64" />
+              <QuestionImages images={question.images} maxHeightClass="max-h-64" />
             </div>
           )}
 
@@ -505,7 +505,7 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
                   {SLIDE_KIND_ICON[q.kind]}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{slideTitle(q, poll.questions)}</span>
-                {q.image && <span title="Má obrázek">🖼</span>}
+                {q.images.length > 0 && <span title="Má obrázek">🖼</span>}
                 {q.kind === "question" ? (
                   <QuestionStatusBadge question={q} isCurrent={q.id === poll.activeQuestionId} compact />
                 ) : (

@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgTable, primaryKey, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, primaryKey, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 // Nejjednodušší schéma, které pokrývá zadání: poll -> otázky -> možnosti,
 // hlasy zvlášť (1:N na otázku, ne sloupec navíc na option) — viz zadání.
@@ -78,6 +78,10 @@ export const questions = pgTable(
     imageWidth: integer("image_width"),
     imageHeight: integer("image_height"),
     imageAlt: varchar("image_alt", { length: 300 }),
+    // 2. a 3. obrázek slajdu (zobrazí se vedle prvního). První zůstává ve
+    // sloupcích image_* (historická data beze změny), NULL = žádné další.
+    // Stejná pravidla jako první obrázek: jen URL z poll_images.
+    extraImages: jsonb("extra_images").$type<{ url: string; width: number; height: number; alt: string | null }[]>(),
     // Volitelný odkaz (zdroj / další informace). Jen http(s), viz
     // lib/polls/validate.ts. Účastníkům se ve výchozím stavu ukáže až po
     // ukončení otázky — odkaz může prozradit správnou odpověď.

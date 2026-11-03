@@ -14,6 +14,15 @@ type OptionDraft = { key: string; id?: number; text: string };
 type ImageDraft =
   | { kind: "stored"; url: string; width: number; height: number }
   | { kind: "pending"; blob: Blob; previewUrl: string; width: number; height: number };
+/** Jeden obrázek slajdu v editoru (`key` = stabilní klíč pro React a nahrávání). */
+type ImageItem = { key: string; draft: ImageDraft; alt: string };
+type ImageActions = {
+  add: (files: File[]) => void;
+  replace: (imageKey: string, file: File) => void;
+  remove: (imageKey: string) => void;
+  move: (imageKey: string, direction: -1 | 1) => void;
+  setAlt: (imageKey: string, alt: string) => void;
+};
 type QuestionDraft = {
   key: string;
   id?: number;
@@ -36,8 +45,8 @@ type QuestionDraft = {
   options: OptionDraft[];
   // Klíč odpovědi označené jako správná (nepovinné), null = běžná anketa.
   correctKey: string | null;
-  image: ImageDraft | null;
-  imageAlt: string;
+  // 0–3 obrázky (vedle sebe na plátně i na telefonu), anketa pro web max. 1.
+  images: ImageItem[];
   linkUrl: string;
   linkLabel: string;
   linkShowDuringVoting: boolean;
@@ -76,8 +85,7 @@ function emptyQuestion(expanded = true, kind: SlideKind = "question"): QuestionD
     expanded,
     options: kind === "question" ? [emptyOption(), emptyOption()] : [],
     correctKey: null,
-    image: null,
-    imageAlt: "",
+    images: [],
     linkUrl: "",
     linkLabel: "",
     linkShowDuringVoting: false,
@@ -109,8 +117,11 @@ function draftFromQuestion(question: EditorQuestion): QuestionDraft {
     expanded: false,
     options: question.options.map((option) => ({ key: `o${option.id}`, id: option.id, text: option.text })),
     correctKey: question.correctOptionId ? `o${question.correctOptionId}` : null,
-    image: question.image ? { kind: "stored", url: question.image.url, width: question.image.width, height: question.image.height } : null,
-    imageAlt: question.image?.alt ?? "",
+    images: question.images.map((image) => ({
+      key: makeKey(),
+      draft: { kind: "stored", url: image.url, width: image.width, height: image.height },
+      alt: image.alt ?? "",
+    })),
     linkUrl: question.link ? readableUrl(question.link.url) : "",
     linkLabel: question.link?.label ?? "",
     linkShowDuringVoting: question.link?.showDuringVoting ?? false,
@@ -119,6 +130,10 @@ function draftFromQuestion(question: EditorQuestion): QuestionDraft {
 }
 
 const LETTERS = "ABCDEFGHIJ";
+
+function revokePending(images: ImageItem[]) {
+  for (const item of images) if (item.draft.kind === "pending") URL.revokeObjectURL(item.draft.previewUrl);
+}
 
 const UPLOAD_ATTEMPTS = 4;
 
@@ -170,19 +185,17 @@ function resultsIndex(question: QuestionDraft, all: QuestionDraft[]): number | n
 /** Návrh otázky → vstup pro PUT /content (zamčené otázky beze změny). */
 function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url: string; width: number; height: number }>, all: QuestionDraft[]) {
   if (question.locked && question.original) {
-    const { id, kind, text, options, image, link, correctOptionId, points, speedBonus } = question.original;
+    const { id, kind, text, options, images, link, correctOptionId, points, speedBonus } = question.original;
     const correctIndex = options.findIndex((option) => option.id === correctOptionId);
-    return { id, kind, text, options, image, link, correctOptionIndex: correctIndex === -1 ? null : correctIndex, points, speedBonus, body: null, resultsQuestionIndex: null };
+    return { id, kind, text, options, images, link, correctOptionIndex: correctIndex === -1 ? null : correctIndex, points, speedBonus, body: null, resultsQuestionIndex: null };
   }
 
-  let image: QuestionImage | null = null;
-  const alt = question.imageAlt.trim() || null;
-  if (question.image?.kind === "stored") {
-    image = { url: question.image.url, width: question.image.width, height: question.image.height, alt };
-  } else if (question.image?.kind === "pending") {
-    const stored = uploaded.get(question.key);
-    if (stored) image = { ...stored, alt };
-  }
+  const images: QuestionImage[] = question.images.flatMap((item) => {
+    const alt = item.alt.trim() || null;
+    if (item.draft.kind === "stored") return [{ url: item.draft.url, width: item.draft.width, height: item.draft.height, alt }];
+    const stored = uploaded.get(item.key);
+    return stored ? [{ ...stored, alt }] : [];
+  });
 
   if (question.kind !== "question") {
     return {
@@ -190,7 +203,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
       kind: question.kind,
       text: question.text.trim(),
       options: [] as { id?: number; text: string }[],
-      image: question.kind === "content" ? image : null,
+      images: question.kind === "content" ? images : [],
       link: null,
       correctOptionIndex: null,
       body: question.kind === "content" ? question.body.trim() || null : null,
@@ -206,7 +219,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
     kind: question.kind,
     text: question.text.trim(),
     options: question.options.map((option) => ({ ...(option.id ? { id: option.id } : {}), text: option.text.trim() })),
-    image,
+    images,
     link: question.linkUrl.trim()
       ? { url: question.linkUrl.trim(), label: question.linkLabel.trim() || null, showDuringVoting: question.linkShowDuringVoting }
       : null,
@@ -302,7 +315,7 @@ export default function PollEditor(props: PollEditorProps) {
     change((prev) => {
       const target = prev.find((q) => q.key === key);
       if (!target || target.locked || prev.length <= 1) return prev;
-      if (target.image?.kind === "pending") URL.revokeObjectURL(target.image.previewUrl);
+      revokePending(target.images);
       return prev.filter((q) => q.key !== key);
     });
   }
@@ -324,9 +337,8 @@ export default function PollEditor(props: PollEditorProps) {
         speedBonus: source.speedBonus,
         options: copiedOptions,
         correctKey: copiedOptions[source.options.findIndex((o) => o.key === source.correctKey)]?.key ?? null,
-        // Uložený obrázek může sdílet i kopie; nenahraný se musí nahrát znovu.
-        image: source.image?.kind === "stored" ? source.image : null,
-        imageAlt: source.image?.kind === "stored" ? source.imageAlt : "",
+        // Uložené obrázky může sdílet i kopie; nenahrané se musí nahrát znovu.
+        images: source.images.filter((item) => item.draft.kind === "stored").map((item) => ({ ...item, key: makeKey() })),
         linkUrl: source.linkUrl,
         linkLabel: source.linkLabel,
         linkShowDuringVoting: source.linkShowDuringVoting,
@@ -353,29 +365,60 @@ export default function PollEditor(props: PollEditorProps) {
     change((prev) => prev.map((q) => (q.key === questionKey && !q.locked ? { ...q, options: updater(q.options) } : q)));
   }
 
-  async function pickImage(questionKey: string, file: File) {
-    const prepared = await prepareImage(file);
-    if (!prepared.ok) {
-      setStatus({ kind: "error", message: prepared.error });
-      return;
-    }
-    change((prev) =>
-      prev.map((q) => {
-        if (q.key !== questionKey || q.locked) return q;
-        if (q.image?.kind === "pending") URL.revokeObjectURL(q.image.previewUrl);
-        return { ...q, image: { kind: "pending", ...prepared.image } };
-      })
-    );
+  const maxImages = selfService ? 1 : LIMITS.MAX_IMAGES_PER_SLIDE;
+
+  function updateImages(questionKey: string, updater: (images: ImageItem[]) => ImageItem[]) {
+    change((prev) => prev.map((q) => (q.key === questionKey && !q.locked ? { ...q, images: updater(q.images) } : q)));
   }
 
-  function removeImage(questionKey: string) {
-    change((prev) =>
-      prev.map((q) => {
-        if (q.key !== questionKey || q.locked) return q;
-        if (q.image?.kind === "pending") URL.revokeObjectURL(q.image.previewUrl);
-        return { ...q, image: null, imageAlt: "" };
-      })
-    );
+  /** Připraví soubory (zmenšení), chyby ukáže; vrací jen úspěšné. */
+  async function prepareFiles(files: File[]) {
+    const prepared: ImageDraft[] = [];
+    for (const file of files) {
+      const result = await prepareImage(file);
+      if (result.ok) prepared.push({ kind: "pending", ...result.image });
+      else setStatus({ kind: "error", message: result.error });
+    }
+    return prepared;
+  }
+
+  function imageActions(questionKey: string): ImageActions {
+    return {
+      add: async (files) => {
+        const prepared = await prepareFiles(files.slice(0, maxImages));
+        updateImages(questionKey, (images) => {
+          const free = Math.max(0, maxImages - images.length);
+          revokePending(prepared.slice(free).map((draft) => ({ key: "", draft, alt: "" })));
+          return [...images, ...prepared.slice(0, free).map((draft) => ({ key: makeKey(), draft, alt: "" }))];
+        });
+      },
+      replace: async (imageKey, file) => {
+        const [draft] = await prepareFiles([file]);
+        if (!draft) return;
+        updateImages(questionKey, (images) =>
+          images.map((item) => {
+            if (item.key !== imageKey) return item;
+            revokePending([item]);
+            return { ...item, draft };
+          })
+        );
+      },
+      remove: (imageKey) =>
+        updateImages(questionKey, (images) => {
+          revokePending(images.filter((item) => item.key === imageKey));
+          return images.filter((item) => item.key !== imageKey);
+        }),
+      move: (imageKey, direction) =>
+        updateImages(questionKey, (images) => {
+          const index = images.findIndex((item) => item.key === imageKey);
+          const target = index + direction;
+          if (index === -1 || target < 0 || target >= images.length) return images;
+          const next = [...images];
+          [next[index], next[target]] = [next[target], next[index]];
+          return next;
+        }),
+      setAlt: (imageKey, alt) => updateImages(questionKey, (images) => images.map((item) => (item.key === imageKey ? { ...item, alt } : item))),
+    };
   }
 
   async function pickBackground(file: File) {
@@ -409,7 +452,7 @@ export default function PollEditor(props: PollEditorProps) {
     for (const [index, q] of questions.entries()) {
       if (q.locked) continue;
       if (q.kind === "content") {
-        if (!q.text.trim() && !q.body.trim() && !q.image) return `Slajd ${index + 1}: doplňte nadpis, text nebo obrázek.`;
+        if (!q.text.trim() && !q.body.trim() && q.images.length === 0) return `Slajd ${index + 1}: doplňte nadpis, text nebo obrázek.`;
         continue;
       }
       if (q.kind === "results") {
@@ -430,15 +473,15 @@ export default function PollEditor(props: PollEditorProps) {
   const requireNames = isEdit ? props.initial.requireParticipantName : requireParticipantName;
 
   async function uploadPending(moderatorToken: string) {
-    const pending = questions.filter((q) => !q.locked && q.image?.kind === "pending");
+    const pending = questions.flatMap((q) => (q.locked ? [] : q.images.filter((item) => item.draft.kind === "pending")));
     const uploaded = new Map<string, { url: string; width: number; height: number }>();
-    for (const [index, q] of pending.entries()) {
-      if (q.image?.kind !== "pending") continue;
+    for (const [index, item] of pending.entries()) {
+      if (item.draft.kind !== "pending") continue;
       const progress = `Nahrávám obrázek ${index + 1} z ${pending.length}…`;
       setStatus({ kind: "saving", message: progress });
       uploaded.set(
-        q.key,
-        await uploadImage(moderatorToken, q.image.blob, (seconds) =>
+        item.key,
+        await uploadImage(moderatorToken, item.draft.blob, (seconds) =>
           setStatus({ kind: "saving", message: `${progress} Úložiště je vytížené, zkouším znovu za ${seconds} s.` })
         )
       );
@@ -507,7 +550,7 @@ export default function PollEditor(props: PollEditorProps) {
     }
 
     const token: string = body.moderatorToken;
-    const hasImages = questions.some((q) => q.image?.kind === "pending") || (!selfService && background !== null);
+    const hasImages = questions.some((q) => q.images.some((item) => item.draft.kind === "pending")) || (!selfService && background !== null);
     if (hasImages) {
       try {
         const uploaded = await uploadPending(token);
@@ -556,7 +599,7 @@ export default function PollEditor(props: PollEditorProps) {
     }
 
     const content = body as EditorContent;
-    for (const q of questions) if (q.image?.kind === "pending") URL.revokeObjectURL(q.image.previewUrl);
+    for (const q of questions) revokePending(q.images);
     if (background?.kind === "pending") URL.revokeObjectURL(background.previewUrl);
     setBackground(content.backgroundImage ? { kind: "stored", ...content.backgroundImage } : null);
     setVersion(content.version);
@@ -679,8 +722,8 @@ export default function PollEditor(props: PollEditorProps) {
             onToggle={() => toggleQuestion(q.key)}
             onChange={(patch) => updateQuestion(q.key, patch)}
             onUpdateOptions={(updater) => updateOptions(q.key, updater)}
-            onPickImage={(file) => pickImage(q.key, file)}
-            onRemoveImage={() => removeImage(q.key)}
+            images={imageActions(q.key)}
+            maxImages={maxImages}
             onDuplicate={() => duplicateQuestion(q.key)}
             onRemove={() => removeQuestion(q.key)}
             onMoveUp={() => moveQuestion(q.key, -1)}
@@ -791,8 +834,8 @@ function QuestionCard({
   onToggle,
   onChange,
   onUpdateOptions,
-  onPickImage,
-  onRemoveImage,
+  images,
+  maxImages,
   onDuplicate,
   onRemove,
   single = false,
@@ -813,8 +856,8 @@ function QuestionCard({
   onToggle: () => void;
   onChange: (patch: Partial<QuestionDraft>) => void;
   onUpdateOptions: (updater: (options: OptionDraft[]) => OptionDraft[]) => void;
-  onPickImage: (file: File) => void;
-  onRemoveImage: () => void;
+  images: ImageActions;
+  maxImages: number;
   onDuplicate: () => void;
   onRemove: () => void;
   /** Anketa pro web: jediná otázka — bez přesunu, duplikace a mazání. */
@@ -822,7 +865,6 @@ function QuestionCard({
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
-  const previewUrl = question.image?.kind === "pending" ? question.image.previewUrl : question.image?.url;
   const actionClass = "rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30";
   const linkProblem = question.kind === "results" ? resultsLinkProblem(question, all) : null;
   const summary = slideSummary(question, all);
@@ -879,16 +921,15 @@ function QuestionCard({
       {question.expanded && (
         <div className="flex flex-col gap-5 px-4 py-5 sm:px-5">
           {question.locked ? (
-            <LockedQuestionBody question={question} previewUrl={previewUrl} />
+            <LockedQuestionBody question={question} />
           ) : question.kind === "content" ? (
             <ContentFields
               question={question}
-              previewUrl={previewUrl}
               imagesEnabled={imagesEnabled}
               disabled={disabled}
               onChange={onChange}
-              onPickImage={onPickImage}
-              onRemoveImage={onRemoveImage}
+              images={images}
+              maxImages={maxImages}
             />
           ) : question.kind === "results" ? (
             <ResultsFields question={question} all={all} problem={linkProblem} onChange={onChange} />
@@ -908,15 +949,7 @@ function QuestionCard({
                 />
               </label>
 
-              <ImageField
-                question={question}
-                previewUrl={previewUrl}
-                imagesEnabled={imagesEnabled}
-                disabled={disabled}
-                onPick={onPickImage}
-                onRemove={onRemoveImage}
-                onAltChange={(imageAlt) => onChange({ imageAlt })}
-              />
+              <ImageField images={question.images} max={maxImages} imagesEnabled={imagesEnabled} disabled={disabled} actions={images} />
 
               <div className="flex flex-col gap-2">
                 <span className="text-sm font-medium text-gray-700">Odpovědi</span>
@@ -994,7 +1027,11 @@ function QuestionCard({
   );
 }
 
-function LockedQuestionBody({ question, previewUrl }: { question: QuestionDraft; previewUrl?: string }) {
+function previewUrlOf(draft: ImageDraft): string {
+  return draft.kind === "pending" ? draft.previewUrl : draft.url;
+}
+
+function LockedQuestionBody({ question }: { question: QuestionDraft }) {
   return (
     <div className="flex flex-col gap-3 text-gray-700">
       <p className="text-sm text-gray-500">
@@ -1002,9 +1039,13 @@ function LockedQuestionBody({ question, previewUrl }: { question: QuestionDraft;
         platné, nelze ji měnit ani odstranit — jen přesunout v pořadí.
       </p>
       <p className="font-semibold text-gray-900">{question.text}</p>
-      {previewUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- náhled v editoru
-        <img src={previewUrl} alt={question.imageAlt || "Obrázek k otázce"} className="max-h-48 w-auto self-start rounded-xl object-contain" />
+      {question.images.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {question.images.map((item) => (
+            // eslint-disable-next-line @next/next/no-img-element -- náhled v editoru
+            <img key={item.key} src={previewUrlOf(item.draft)} alt={item.alt || "Obrázek k otázce"} className="max-h-48 w-auto rounded-xl object-contain" />
+          ))}
+        </div>
       )}
       <ul className="flex flex-col gap-1 text-sm">
         {question.options.map((option, optionIndex) => (
@@ -1021,105 +1062,152 @@ function LockedQuestionBody({ question, previewUrl }: { question: QuestionDraft;
 }
 
 function ImageField({
-  question,
-  previewUrl,
+  images,
+  max,
   imagesEnabled,
   disabled,
-  onPick,
-  onRemove,
-  onAltChange,
+  actions,
 }: {
-  question: QuestionDraft;
-  previewUrl?: string;
+  images: ImageItem[];
+  max: number;
   imagesEnabled: boolean;
   disabled: boolean;
-  onPick: (file: File) => void;
-  onRemove: () => void;
-  onAltChange: (alt: string) => void;
+  actions: ImageActions;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const replaceRef = useRef<HTMLInputElement>(null);
+  const replaceKey = useRef<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const canAdd = images.length < max;
 
   function handleDrop(event: DragEvent) {
     event.preventDefault();
     setDragging(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file && imagesEnabled && !disabled) onPick(file);
-  }
-
-  const fileInput = (
-    <input
-      ref={inputRef}
-      type="file"
-      accept={IMAGE_ACCEPT_ATTRIBUTE}
-      className="hidden"
-      onChange={(e) => {
-        const file = e.target.files?.[0];
-        if (file) onPick(file);
-        e.target.value = "";
-      }}
-    />
-  );
-
-  if (question.image && previewUrl) {
-    return (
-      <div className="flex flex-col gap-3">
-        <span className="text-sm font-medium text-gray-700">Obrázek</span>
-        <div className="rounded-2xl border border-gray-200 bg-cream p-3">
-          {/* eslint-disable-next-line @next/next/no-img-element -- lokální náhled (blob:) nebo obrázek z Content API */}
-          <img src={previewUrl} alt={question.imageAlt || "Náhled obrázku"} className="mx-auto max-h-72 w-auto rounded-xl object-contain" />
-          {question.image.kind === "pending" && <p className="mt-2 text-center text-xs text-gray-500">Obrázek se nahraje při uložení.</p>}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {fileInput}
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={disabled || !imagesEnabled}
-            className="rounded-xl border-2 border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-brand hover:text-brand disabled:opacity-50"
-          >
-            Nahradit obrázek
-          </button>
-          <button type="button" onClick={onRemove} disabled={disabled} className="rounded-xl px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
-            Odebrat obrázek
-          </button>
-        </div>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-gray-700">Popis obrázku pro nevidomé (nepovinné)</span>
-          <input
-            type="text"
-            value={question.imageAlt}
-            onChange={(e) => onAltChange(e.target.value)}
-            maxLength={LIMITS.MAX_IMAGE_ALT_LENGTH}
-            placeholder="např. Fotografie poranění předloktí"
-            className="rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
-          />
-        </label>
-      </div>
-    );
+    const files = [...(event.dataTransfer.files ?? [])];
+    if (files.length > 0 && imagesEnabled && !disabled && canAdd) actions.add(files);
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-gray-700">Obrázek (nepovinné)</span>
-      {fileInput}
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (imagesEnabled) setDragging(true);
+    <div className="flex flex-col gap-3">
+      <span className="text-sm font-medium text-gray-700">
+        {max > 1 ? `Obrázky (nepovinné, až ${max} vedle sebe)` : "Obrázek (nepovinné)"}
+      </span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={IMAGE_ACCEPT_ATTRIBUTE}
+        multiple={max > 1}
+        className="hidden"
+        onChange={(e) => {
+          const files = [...(e.target.files ?? [])];
+          if (files.length > 0) actions.add(files);
+          e.target.value = "";
         }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        disabled={disabled || !imagesEnabled}
-        className={`flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition disabled:cursor-not-allowed disabled:opacity-50 ${
-          dragging ? "border-brand bg-brand-light/60" : "border-brand/25 bg-cream hover:border-brand hover:bg-brand-light/40"
-        }`}
-      >
-        <span className="font-semibold text-brand">+ Přidat obrázek</span>
-        <span className="text-xs text-gray-500">Klikněte nebo sem přetáhněte soubor · JPEG, PNG, WebP, GIF (bez animace) · velké fotky se zmenší</span>
-      </button>
+      />
+      <input
+        ref={replaceRef}
+        type="file"
+        accept={IMAGE_ACCEPT_ATTRIBUTE}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && replaceKey.current) actions.replace(replaceKey.current, file);
+          e.target.value = "";
+        }}
+      />
+
+      {images.length > 0 && (
+        <ul className={`grid gap-3 ${images.length > 1 ? "sm:grid-cols-3" : ""}`}>
+          {images.map((item, index) => (
+            <li key={item.key} className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-cream p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- lokální náhled (blob:) nebo obrázek z Content API */}
+              <img
+                src={previewUrlOf(item.draft)}
+                alt={item.alt || "Náhled obrázku"}
+                className={`mx-auto w-auto rounded-xl object-contain ${images.length > 1 ? "max-h-40" : "max-h-72"}`}
+              />
+              {item.draft.kind === "pending" && <p className="text-center text-xs text-gray-500">Obrázek se nahraje při uložení.</p>}
+              <div className="flex flex-wrap items-center gap-1">
+                {images.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => actions.move(item.key, -1)}
+                      disabled={disabled || index === 0}
+                      aria-label="Posunout obrázek doleva"
+                      className="rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-white disabled:opacity-30"
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => actions.move(item.key, 1)}
+                      disabled={disabled || index === images.length - 1}
+                      aria-label="Posunout obrázek doprava"
+                      className="rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-white disabled:opacity-30"
+                    >
+                      →
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    replaceKey.current = item.key;
+                    replaceRef.current?.click();
+                  }}
+                  disabled={disabled || !imagesEnabled}
+                  className="rounded-lg px-2 py-1 text-sm font-semibold text-gray-700 hover:bg-white hover:text-brand disabled:opacity-50"
+                >
+                  Nahradit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => actions.remove(item.key)}
+                  disabled={disabled}
+                  className="rounded-lg px-2 py-1 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Odebrat
+                </button>
+              </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-gray-600">Popis pro nevidomé (nepovinné)</span>
+                <input
+                  type="text"
+                  value={item.alt}
+                  onChange={(e) => actions.setAlt(item.key, e.target.value)}
+                  maxLength={LIMITS.MAX_IMAGE_ALT_LENGTH}
+                  placeholder="např. RTG hrudníku, zadopřední projekce"
+                  className="rounded-xl border-2 border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
+                />
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {canAdd && (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (imagesEnabled) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          disabled={disabled || !imagesEnabled}
+          className={`flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed px-4 text-center transition disabled:cursor-not-allowed disabled:opacity-50 ${
+            images.length > 0 ? "py-3" : "py-6"
+          } ${dragging ? "border-brand bg-brand-light/60" : "border-brand/25 bg-cream hover:border-brand hover:bg-brand-light/40"}`}
+        >
+          <span className="font-semibold text-brand">{images.length > 0 ? "+ Přidat další obrázek" : "+ Přidat obrázek"}</span>
+          <span className="text-xs text-gray-500">
+            Klikněte nebo sem přetáhněte {max > 1 ? `soubory (zbývá ${max - images.length})` : "soubor"} · JPEG, PNG, WebP, GIF (bez animace) · velké
+            fotky se zmenší
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -1196,8 +1284,9 @@ function LinkField({ question, onChange }: { question: QuestionDraft; onChange: 
 function contentLayout(question: QuestionDraft): string {
   const title = question.text.trim();
   const body = question.body.trim();
-  if (question.image && !body) return title ? "Obrázek s nadpisem" : "Samotný obrázek";
-  if (question.image) return "Nadpis, text a obrázek";
+  const pictures = question.images.length > 1 ? `${question.images.length} obrázky vedle sebe` : "obrázek";
+  if (question.images.length > 0 && !body) return title ? `Nadpis a ${pictures}` : question.images.length > 1 ? `Samotné ${pictures}` : "Samotný obrázek";
+  if (question.images.length > 0) return `Nadpis, text a ${pictures}`;
   if (body) return title ? "Nadpis a text" : "Samotný text";
   return title ? "Samotný nadpis" : "Prázdný slajd";
 }
@@ -1212,7 +1301,7 @@ function slideSummary(question: QuestionDraft, all: QuestionDraft[]): { title: s
   switch (question.kind) {
     case "content":
       return {
-        title: question.text.trim() || question.body.trim().split("\n")[0] || (question.image ? "Obrázek" : "Nový obsah"),
+        title: question.text.trim() || question.body.trim().split("\n")[0] || (question.images.length > 0 ? "Obrázek" : "Nový obsah"),
         detail: contentLayout(question),
       };
     case "results": {
@@ -1236,7 +1325,7 @@ function slideSummary(question: QuestionDraft, all: QuestionDraft[]): { title: s
         title: question.text.trim() || "Nová otázka",
         detail: [
           `${question.options.length} odpovědi`,
-          question.image ? "obrázek" : "",
+          question.images.length > 1 ? `${question.images.length} obrázky` : question.images.length === 1 ? "obrázek" : "",
           question.linkUrl.trim() ? "odkaz" : "",
           correct ? `bodovaná (${question.points} b.${question.speedBonus ? " + bonus za rychlost" : ""})` : "",
         ]
@@ -1249,20 +1338,18 @@ function slideSummary(question: QuestionDraft, all: QuestionDraft[]): { title: s
 
 function ContentFields({
   question,
-  previewUrl,
   imagesEnabled,
   disabled,
   onChange,
-  onPickImage,
-  onRemoveImage,
+  images,
+  maxImages,
 }: {
   question: QuestionDraft;
-  previewUrl?: string;
   imagesEnabled: boolean;
   disabled: boolean;
   onChange: (patch: Partial<QuestionDraft>) => void;
-  onPickImage: (file: File) => void;
-  onRemoveImage: () => void;
+  images: ImageActions;
+  maxImages: number;
 }) {
   const lines = question.body.split("\n").filter((line) => line.trim()).length;
   const longBody = question.body.trim().length > LIMITS.SLIDE_BODY_WARN_LENGTH || lines > 8;
@@ -1303,15 +1390,7 @@ function ContentFields({
         )}
       </label>
 
-      <ImageField
-        question={question}
-        previewUrl={previewUrl}
-        imagesEnabled={imagesEnabled}
-        disabled={disabled}
-        onPick={onPickImage}
-        onRemove={onRemoveImage}
-        onAltChange={(imageAlt) => onChange({ imageAlt })}
-      />
+      <ImageField images={question.images} max={maxImages} imagesEnabled={imagesEnabled} disabled={disabled} actions={images} />
       <p className="text-xs text-gray-500">
         Rozložení se nastaví samo podle vyplněných polí: <span className="font-semibold text-gray-700">{contentLayout(question)}</span>. Obrázek se
         nedeformuje, jen zmenší, aby se vešel.
@@ -1475,7 +1554,7 @@ function ScoringFields({ question, onChange }: { question: QuestionDraft; onChan
   );
 }
 
-/** Obrázek na pozadí celé prezentace (jen na plátně, ztlumený kvůli čitelnosti). */
+/** Obrázek na pozadí celé prezentace (jen na plátně, bez ztlumení). */
 function BackgroundField({
   image,
   imagesEnabled,
@@ -1510,20 +1589,18 @@ function BackgroundField({
       />
       <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-cream px-4 py-3">
         {previewUrl ? (
-          // Náhled se stejným ztlumením jako na plátně.
+          // Náhled tak, jak bude na plátně (bez ztlumení).
           <span className="relative block h-16 w-28 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
             {/* eslint-disable-next-line @next/next/no-img-element -- lokální náhled (blob:) nebo obrázek z Content API */}
             <img src={previewUrl} alt="" className="h-full w-full object-cover" />
-            <span className="absolute inset-0 bg-white/[0.78]" />
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-800">Aa</span>
           </span>
         ) : null}
         <span className="min-w-0 flex-1 text-xs text-gray-500">
           {previewUrl
             ? image?.kind === "pending"
               ? "Obrázek se nahraje při uložení."
-              : "Zobrazí se za všemi slajdy na plátně, ztlumený, aby text zůstal čitelný."
-            : "Jeden obrázek za všemi slajdy na plátně (účastníkům na telefonech se nezobrazuje). Ztlumí se, aby text zůstal čitelný."}
+              : "Zobrazí se za všemi slajdy na plátně. Volte spíš světlý, klidný obrázek, ať je text dobře čitelný."
+            : "Jeden obrázek za všemi slajdy na plátně (účastníkům na telefonech se nezobrazuje). Zobrazí se bez ztlumení – volte spíš světlý, klidný obrázek."}
         </span>
         <div className="flex gap-2">
           <button

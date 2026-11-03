@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import QrCode from "../../../components/QrCode.tsx";
-import QuestionImage from "../../../components/QuestionImage.tsx";
+import { QuestionImages } from "../../../components/QuestionImage.tsx";
 import QuestionLink from "../../../components/QuestionLink.tsx";
 import ResultsBarChart from "../../../components/ResultsBarChart.tsx";
 import SlideBody from "../../../components/SlideBody.tsx";
@@ -136,15 +136,19 @@ export default function PresentationView({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white text-gray-900">
       {poll.backgroundImage && (
-        // Pozadí celé prezentace — pod bílým závojem, aby text i grafy
-        // zůstaly čitelné i na slabém projektoru.
+        // Pozadí celé prezentace — bez ztlumení (přání autora); čitelnost
+        // textu je na volbě obrázku, odpovědi mají vlastní bílý podklad.
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
           {/* eslint-disable-next-line @next/next/no-img-element -- obrázek z Content API, jen dekorace */}
           <img src={poll.backgroundImage.url} alt="" className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-white/[0.78]" />
         </div>
       )}
-      <header className="relative flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-gray-100 px-6 py-3 lg:px-12">
+      <header
+        className={`relative flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-gray-100 px-6 py-3 lg:px-12 ${
+          // S pozadím (bez ztlumení) mají lišty vlastní podklad, aby kód a ovládání zůstaly čitelné.
+          poll.backgroundImage ? "bg-white/85 backdrop-blur-sm" : ""
+        }`}
+      >
         <p className="text-lg text-gray-600 lg:text-2xl">
           Hlasujte na <span className="font-bold text-gray-900">hlasuju.cz</span> · kód{" "}
           <span className="font-bold tracking-widest text-brand">{formatCode(poll.publicCode)}</span>
@@ -163,7 +167,11 @@ export default function PresentationView({
         {slide.kind === "leaderboard" && <LeaderboardSlide slide={slide} page={page} />}
       </main>
 
-      <footer className="relative flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-6 py-3 lg:px-12">
+      <footer
+        className={`relative flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-6 py-3 lg:px-12 ${
+          poll.backgroundImage ? "bg-white/85 backdrop-blur-sm" : ""
+        }`}
+      >
         <p className="text-xl font-semibold text-gray-700 lg:text-2xl">
           {isQuestion
             ? slide.status === "prepared"
@@ -269,12 +277,56 @@ export default function PresentationView({
 
 function QuestionSlide({ slide, showResults }: { slide: ModeratorQuestionView; showResults: boolean }) {
   const linkVisible = slide.link && (slide.status === "ended" || slide.link.showDuringVoting);
+  // Víc obrázků (např. snímky k porovnání): obrázky přes celou šířku,
+  // odpovědi pod nimi v řádku — ve sloupci vedle by byly obrázky malé.
+  const stacked = slide.images.length > 1;
+  const hasImages = slide.images.length > 0;
+  const answers = showResults ? (
+    <>
+      <ResultsBarChart
+        options={slide.options}
+        totalVotes={slide.totalVotes}
+        // Vyhodnocení až po uzavření otázky — během odpovídání (i po
+        // znovuotevření) se správná odpověď na plátně neukáže.
+        correctOptionId={slide.status === "ended" ? slide.correctOptionId : null}
+        large
+      />
+      <FastestList fastest={slide.fastest} />
+    </>
+  ) : (
+    <ol className={stacked ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3 lg:gap-4"}>
+      {slide.options.map((option, index) => (
+        <li key={option.id} className="flex items-center gap-4 rounded-2xl border-2 border-gray-200 bg-white/80 px-5 py-3 lg:px-6 lg:py-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-xl font-bold text-white lg:h-12 lg:w-12 lg:text-2xl">
+            {LETTERS[index]}
+          </span>
+          <span className={`min-w-0 break-words text-2xl font-medium ${hasImages ? "lg:text-3xl" : "lg:text-4xl"}`}>{option.text}</span>
+        </li>
+      ))}
+    </ol>
+  );
+
+  if (stacked) {
+    return (
+      <>
+        <h1 className="text-3xl font-bold leading-tight lg:text-4xl xl:text-5xl">{slide.text}</h1>
+        <div className="mt-4 flex flex-1 flex-col justify-center gap-5 lg:gap-6">
+          <QuestionImages images={slide.images} fitHeight={showResults ? "min(36vh, 100vh - 34rem)" : "min(50vh, 100vh - 24rem)"} priority />
+          <div className="flex min-w-0 flex-col gap-4">
+            {answers}
+            {linkVisible && slide.link && <QuestionLink link={slide.link} large />}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      <h1 className={`text-3xl font-bold leading-tight ${slide.image ? "lg:text-4xl xl:text-5xl" : "lg:text-5xl"}`}>{slide.text}</h1>
+      <h1 className={`text-3xl font-bold leading-tight ${hasImages ? "lg:text-4xl xl:text-5xl" : "lg:text-5xl"}`}>{slide.text}</h1>
       <div
         className={`mt-5 flex-1 ${
-          slide.image
+          hasImages
             ? // S obrázkem: obrázek ~65 % šířky, odpovědi ~35 % (s výsledky
               // ~60/40 — pruhy a procenta potřebují víc místa). Výška obrázku
               // = zbytek obrazovky po hlavičce, nadpisu a patičce (max. 70vh).
@@ -284,38 +336,19 @@ function QuestionSlide({ slide, showResults }: { slide: ModeratorQuestionView; s
             : "flex flex-col justify-center lg:mt-6"
         }`}
       >
-        {slide.image && (
+        {hasImages && (
           <>
-            <QuestionImage image={slide.image} maxHeightClass="max-h-[55vh]" className="lg:hidden" priority />
-            <QuestionImage image={slide.image} fitHeight="min(70vh, 100vh - 16rem)" className="hidden lg:block" priority />
+            <div className="lg:hidden">
+              <QuestionImages images={slide.images} maxHeightClass="max-h-[55vh]" priority />
+            </div>
+            <div className="hidden lg:block">
+              <QuestionImages images={slide.images} fitHeight="min(70vh, 100vh - 16rem)" priority />
+            </div>
           </>
         )}
 
         <div className="flex min-w-0 flex-col gap-6">
-          {showResults ? (
-            <>
-              <ResultsBarChart
-                options={slide.options}
-                totalVotes={slide.totalVotes}
-                // Vyhodnocení až po uzavření otázky — během odpovídání (i po
-                // znovuotevření) se správná odpověď na plátně neukáže.
-                correctOptionId={slide.status === "ended" ? slide.correctOptionId : null}
-                large
-              />
-              <FastestList fastest={slide.fastest} />
-            </>
-          ) : (
-            <ol className="flex flex-col gap-3 lg:gap-4">
-              {slide.options.map((option, index) => (
-                <li key={option.id} className="flex items-center gap-4 rounded-2xl border-2 border-gray-200 bg-white/80 px-5 py-3 lg:px-6 lg:py-4">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-xl font-bold text-white lg:h-12 lg:w-12 lg:text-2xl">
-                    {LETTERS[index]}
-                  </span>
-                  <span className={`min-w-0 break-words text-2xl font-medium ${slide.image ? "lg:text-3xl" : "lg:text-4xl"}`}>{option.text}</span>
-                </li>
-              ))}
-            </ol>
-          )}
+          {answers}
           {linkVisible && slide.link && <QuestionLink link={slide.link} large />}
         </div>
       </div>
@@ -328,22 +361,22 @@ function ContentSlide({ slide }: { slide: ModeratorQuestionView }) {
   const title = slide.text.trim();
   const body = slide.body?.trim() ?? "";
 
-  if (slide.image && !body) {
+  if (slide.images.length > 0 && !body) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-5">
         {title && <h1 className="text-center text-4xl font-bold leading-tight lg:text-6xl">{title}</h1>}
-        <QuestionImage image={slide.image} fitHeight={title ? "min(68vh, 100vh - 18rem)" : "min(78vh, 100vh - 10rem)"} className="w-full" priority />
+        <QuestionImages images={slide.images} fitHeight={title ? "min(68vh, 100vh - 18rem)" : "min(78vh, 100vh - 10rem)"} className="w-full" priority />
       </div>
     );
   }
 
-  if (slide.image) {
+  if (slide.images.length > 0) {
     return (
       <div className="flex flex-1 flex-col justify-center gap-6">
         {title && <h1 className="text-4xl font-bold leading-tight lg:text-5xl xl:text-6xl">{title}</h1>}
         <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <SlideBody text={body} className="text-2xl leading-snug text-gray-800 lg:text-3xl xl:text-4xl" />
-          <QuestionImage image={slide.image} fitHeight="min(66vh, 100vh - 18rem)" priority />
+          <QuestionImages images={slide.images} fitHeight="min(66vh, 100vh - 18rem)" priority />
         </div>
       </div>
     );

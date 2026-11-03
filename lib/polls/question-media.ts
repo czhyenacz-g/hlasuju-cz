@@ -8,6 +8,7 @@ export const questionMediaColumns = {
   imageWidth: questions.imageWidth,
   imageHeight: questions.imageHeight,
   imageAlt: questions.imageAlt,
+  extraImages: questions.extraImages,
   linkUrl: questions.linkUrl,
   linkLabel: questions.linkLabel,
   linkShowDuringVoting: questions.linkShowDuringVoting,
@@ -18,14 +19,33 @@ type MediaRow = {
   imageWidth: number | null;
   imageHeight: number | null;
   imageAlt: string | null;
+  extraImages: QuestionImage[] | null;
   linkUrl: string | null;
   linkLabel: string | null;
   linkShowDuringVoting: boolean;
 };
 
-export function toQuestionImage(row: MediaRow): QuestionImage | null {
-  if (!row.imageUrl || !row.imageWidth || !row.imageHeight) return null;
-  return { url: row.imageUrl, width: row.imageWidth, height: row.imageHeight, alt: row.imageAlt };
+/** Všechny obrázky slajdu v pořadí: první ze sloupců image_*, další z extra_images. */
+export function toQuestionImages(row: Pick<MediaRow, "imageUrl" | "imageWidth" | "imageHeight" | "imageAlt" | "extraImages">): QuestionImage[] {
+  if (!row.imageUrl || !row.imageWidth || !row.imageHeight) return [];
+  return [{ url: row.imageUrl, width: row.imageWidth, height: row.imageHeight, alt: row.imageAlt }, ...(row.extraImages ?? [])];
+}
+
+/** Sloupce pro zápis obrázků slajdu (opak toQuestionImages). */
+export function questionImageColumns(images: QuestionImage[]) {
+  const [first, ...rest] = images;
+  return {
+    imageUrl: first?.url ?? null,
+    imageWidth: first?.width ?? null,
+    imageHeight: first?.height ?? null,
+    imageAlt: first?.alt ?? null,
+    extraImages: rest.length > 0 ? rest : null,
+  };
+}
+
+/** URL všech obrázků slajdu (pro úklid úložiště). */
+export function questionImageUrls(row: { imageUrl: string | null; extraImages: QuestionImage[] | null }): string[] {
+  return [row.imageUrl, ...(row.extraImages ?? []).map((image) => image.url)].filter((url): url is string => Boolean(url));
 }
 
 /** Pozadí prezentace z řádku pollu (polls.background_image_*). */

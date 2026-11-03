@@ -176,7 +176,7 @@ describe("B — výpadky a limity Content API", () => {
     assert.equal((await activate(created.moderatorToken, content.questions[0].id)).status, 200);
     const { response, body } = await getPublic(created.publicCode);
     assert.equal(response.status, 200);
-    assert.equal(body.activeQuestion.image.url, image.url);
+    assert.equal(body.activeQuestion.images[0].url, image.url);
   });
 });
 
@@ -192,11 +192,11 @@ describe("B — celý workflow obrázku: uložit, zobrazit, nahradit, odstranit"
     withImage.questions[0].image = { url: first.url, width: 1, height: 1, alt: "Fotografie zranění" };
     const saved = await putContent(created.moderatorToken, withImage);
     assert.equal(saved.response.status, 200);
-    assert.deepEqual(saved.body.questions[0].image, { url: first.url, width: 1200, height: 800, alt: "Fotografie zranění" });
+    assert.deepEqual(saved.body.questions[0].images[0], { url: first.url, width: 1200, height: 800, alt: "Fotografie zranění" });
 
     // Moderátor ho vidí v konzoli, účastník až po spuštění otázky.
     const moderator = await getModerator(created.moderatorToken);
-    assert.equal(moderator.body.questions[0].image.url, first.url);
+    assert.equal(moderator.body.questions[0].images[0].url, first.url);
     assert.equal((await getPublic(created.publicCode)).body.activeQuestion, null);
 
     // Náhrada → starý soubor se smaže v Content API.
@@ -212,7 +212,7 @@ describe("B — celý workflow obrázku: uložit, zobrazit, nahradit, odstranit"
     // Účastník vidí obrázek aktivní otázky.
     await activate(created.moderatorToken, questionId);
     const publicView = await getPublic(created.publicCode);
-    assert.equal(publicView.body.activeQuestion.image.url, second.url);
+    assert.equal(publicView.body.activeQuestion.images[0].url, second.url);
     const served = await fetch(second.url);
     assert.equal(served.status, 200);
     assert.match(served.headers.get("cache-control") ?? "", /immutable/);
@@ -347,5 +347,111 @@ describe("pozadí prezentace", () => {
     const { body: content } = await getContent(created.moderatorToken);
     const bad = await putContent(created.moderatorToken, { ...contentToPayload(content), backgroundImage: { url: "javascript:alert(1)", width: 10, height: 10 } });
     assert.equal(bad.response.status, 400);
+  });
+});
+
+describe("více obrázků na slajdu", () => {
+  /** Payload s obrázky v novém tvaru `images` (editor po zavedení více obrázků). */
+  function withImages(content: Parameters<typeof contentToPayload>[0], perQuestion: Record<number, unknown[]>) {
+    const payload = contentToPayload(content);
+    payload.questions.forEach((question, index) => {
+      const q = question as Record<string, unknown>;
+      delete q.image;
+      q.images = perQuestion[index] ?? (content.questions[index].images ?? []);
+    });
+    return payload;
+  }
+  const img = (body: { url: string }, alt: string | null = null) => ({ url: body.url, width: 1, height: 1, alt });
+
+  test("uloží až 3 obrázky v pořadí, rozměry z evidence; vidí je moderátor i účastník; čtvrtý nebo duplicitní → 400", async () => {
+    const { body: created } = await createPoll();
+    const token = created.moderatorToken;
+    const { body: content } = await getContent(token);
+    const a = (await upload(token, pngBytes(300, 600))).body;
+    const b = (await upload(token, pngBytes(400, 400))).body;
+    const c = (await upload(token, jpegBytes(800, 400))).body;
+
+    const saved = await putContent(token, withImages(content, { 0: [img(a, "RTG 1"), img(b), img(c, "RTG 3")] }));
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.body));
+    assert.deepEqual(saved.body.questions[0].images, [
+      { url: a.url, width: 300, height: 600, alt: "RTG 1" },
+      { url: b.url, width: 400, height: 400, alt: null },
+      { url: c.url, width: 800, height: 400, alt: "RTG 3" },
+    ]);
+    assert.deepEqual(
+      (await getModerator(token)).body.questions[0].images.map((image: { url: string }) => image.url),
+      [a.url, b.url, c.url]
+    );
+    await activate(token, content.questions[0].id);
+    assert.equal((await getPublic(created.publicCode)).body.activeQuestion.images.length, 3);
+
+    const d = (await upload(token, pngBytes(10, 10))).body;
+    const four = await putContent(token, withImages(saved.body, { 1: [img(a), img(b), img(c), img(d)] }));
+    assert.equal(four.response.status, 400);
+    assert.match(four.body.error, /nejvýš 3 obrázky/);
+    const duplicate = await putContent(token, withImages(saved.body, { 1: [img(a), img(a)] }));
+    assert.equal(duplicate.response.status, 400);
+
+    // Cizí URL mezi obrázky → 409, nic se neuloží.
+    const foreign = await putContent(token, withImages(saved.body, { 1: [img(d), img({ url: "https://evil.example.com/x.png" })] }));
+    assert.equal(foreign.response.status, 409);
+  });
+
+  test("odebrání druhého obrázku smaže jen jeho soubor; přeřazení nic nesmaže; spuštěnou otázku nejde přeřadit", async () => {
+    const { body: created } = await createPoll();
+    const token = created.moderatorToken;
+    const { body: content } = await getContent(token);
+    const a = (await upload(token, pngBytes(20, 20))).body;
+    const b = (await upload(token, pngBytes(30, 30))).body;
+    const c = (await upload(token, pngBytes(40, 40))).body;
+    const saved = await putContent(token, withImages(content, { 0: [img(a), img(b), img(c)], 1: [img(a), img(c)] }));
+    assert.equal(saved.response.status, 200);
+
+    const reordered = await putContent(token, withImages(saved.body, { 0: [img(c), img(a), img(b)] }));
+    assert.equal(reordered.response.status, 200);
+    assert.deepEqual(reordered.body.questions[0].images.map((image: { url: string }) => image.url), [c.url, a.url, b.url]);
+    assert.equal((await testDb.db.select().from(pollImages).where(eq(pollImages.pollId, (await testDb.db.select().from(pollImages).where(eq(pollImages.url, a.url)))[0].pollId))).filter((row) => row.deletedAt).length, 0);
+
+    // Bez `b` a `c` (`c` dál používá druhá otázka jako 2. obrázek) → smaže se jen `b`.
+    const removed = await putContent(token, withImages(reordered.body, { 0: [img(a)] }));
+    assert.equal(removed.response.status, 200);
+    for (const [image, deleted] of [[a, false], [b, true], [c, false]] as const) {
+      const [row] = await testDb.db.select().from(pollImages).where(eq(pollImages.url, image.url));
+      assert.equal(Boolean(row.deletedAt), deleted, image.url);
+      assert.equal(api.media.get(row.storageId)?.deleted, deleted);
+    }
+
+    // Spuštěná otázka: stejné obrázky projdou, změna pořadí ne.
+    const locked = await putContent(token, withImages(removed.body, { 1: [img(c), img(a)] }));
+    assert.equal(locked.response.status, 200);
+    await activate(token, content.questions[1].id);
+    const same = await putContent(token, withImages(locked.body, {}));
+    assert.equal(same.response.status, 200);
+    const swapped = await putContent(token, withImages(same.body, { 1: [img(a), img(c)] }));
+    assert.equal(swapped.response.status, 409);
+  });
+
+  test("nové promítání převezme všechny obrázky; anketa pro web smí mít jen jeden", async () => {
+    const { body: created } = await createPoll();
+    const token = created.moderatorToken;
+    const { body: content } = await getContent(token);
+    const a = (await upload(token, pngBytes(20, 20))).body;
+    const b = (await upload(token, pngBytes(30, 30))).body;
+    assert.equal((await putContent(token, withImages(content, { 0: [img(a), img(b)] }))).response.status, 200);
+
+    const response = await duplicateRoute.POST(new Request("http://localhost/x", { method: "POST", headers: { "x-forwarded-for": uniqueIp() } }) as never, routeParams({ moderatorToken: token }));
+    const copy = await response.json();
+    assert.deepEqual(
+      (await getModerator(copy.moderatorToken)).body.questions[0].images.map((image: { url: string }) => image.url),
+      [a.url, b.url]
+    );
+
+    const { body: web } = await createPoll({ mode: "self_service", questions: [{ text: "Kam?", options: [{ text: "A" }, { text: "B" }] }] });
+    const { body: webContent } = await getContent(web.moderatorToken);
+    const x = (await upload(web.moderatorToken, pngBytes(20, 20))).body;
+    const y = (await upload(web.moderatorToken, pngBytes(30, 30))).body;
+    const two = await putContent(web.moderatorToken, withImages(webContent, { 0: [img(x), img(y)] }));
+    assert.equal(two.response.status, 409);
+    assert.equal((await putContent(web.moderatorToken, withImages(webContent, { 0: [img(x)] }))).response.status, 200);
   });
 });

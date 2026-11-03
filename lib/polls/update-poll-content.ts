@@ -3,8 +3,8 @@ import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, pollImages, polls, questions, votes } from "../../db/schema.ts";
 import { deleteUnusedPollImagesQuietly } from "../images/poll-images.ts";
-import { questionMediaColumns } from "./question-media.ts";
-import type { QuestionStatus, SlideKind, UpdatePollInput, UpdatePollQuestionInput } from "./types.ts";
+import { questionImageColumns, questionMediaColumns, toQuestionImages } from "./question-media.ts";
+import type { QuestionImage, QuestionStatus, SlideKind, UpdatePollInput, UpdatePollQuestionInput } from "./types.ts";
 
 export type UpdatePollContentResult =
   | { ok: true; version: number }
@@ -20,8 +20,7 @@ type ExistingQuestion = {
   points: number;
   speedBonus: boolean;
   status: QuestionStatus;
-  imageUrl: string | null;
-  imageAlt: string | null;
+  images: QuestionImage[];
   linkUrl: string | null;
   linkLabel: string | null;
   linkShowDuringVoting: boolean;
@@ -43,14 +42,13 @@ export function isQuestionLocked(question: { status: string; voteCount: number }
 }
 
 function sameLockedContent(existing: ExistingQuestion, input: UpdatePollQuestionInput): boolean {
-  const image = input.image;
   const link = input.link;
   return (
     existing.text === input.text &&
     existing.options.length === input.options.length &&
     existing.options.every((option, index) => option.id === input.options[index].id && option.text === input.options[index].text) &&
-    (existing.imageUrl ?? null) === (image?.url ?? null) &&
-    (existing.imageUrl ? (existing.imageAlt ?? null) === (image?.alt ?? null) : true) &&
+    existing.images.length === input.images.length &&
+    existing.images.every((image, index) => image.url === input.images[index].url && (image.alt ?? null) === (input.images[index].alt ?? null)) &&
     (existing.linkUrl ?? null) === (link?.url ?? null) &&
     (existing.linkUrl
       ? (existing.linkLabel ?? null) === (link?.label ?? null) && existing.linkShowDuringVoting === (link?.showDuringVoting ?? false)
@@ -70,10 +68,7 @@ function questionColumns(input: UpdatePollQuestionInput, position: number) {
     points: input.points ?? 1,
     speedBonus: input.speedBonus ?? false,
     position,
-    imageUrl: input.image?.url ?? null,
-    imageWidth: input.image?.width ?? null,
-    imageHeight: input.image?.height ?? null,
-    imageAlt: input.image?.alt ?? null,
+    ...questionImageColumns(input.images),
     linkUrl: input.link?.url ?? null,
     linkLabel: input.link?.label ?? null,
     linkShowDuringVoting: input.link?.showDuringVoting ?? false,
@@ -172,8 +167,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         points: row.points,
         speedBonus: row.speedBonus,
         status: row.status as QuestionStatus,
-        imageUrl: row.imageUrl,
-        imageAlt: row.imageAlt,
+        images: toQuestionImages(row),
         linkUrl: row.linkUrl,
         linkLabel: row.linkLabel,
         linkShowDuringVoting: row.linkShowDuringVoting,
@@ -201,13 +195,13 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
           .where(and(eq(pollImages.pollId, poll.id), isNull(pollImages.deletedAt)))
       ).map((row) => [row.url, row])
     );
-    for (const row of [
-      ...questionRows,
-      { imageUrl: poll.backgroundImageUrl, imageWidth: poll.backgroundImageWidth, imageHeight: poll.backgroundImageHeight },
+    for (const image of [
+      ...questionRows.flatMap((row) => toQuestionImages(row)),
+      ...(poll.backgroundImageUrl && poll.backgroundImageWidth && poll.backgroundImageHeight
+        ? [{ url: poll.backgroundImageUrl, width: poll.backgroundImageWidth, height: poll.backgroundImageHeight }]
+        : []),
     ]) {
-      if (row.imageUrl && row.imageWidth && row.imageHeight && !ownImages.has(row.imageUrl)) {
-        ownImages.set(row.imageUrl, { url: row.imageUrl, width: row.imageWidth, height: row.imageHeight });
-      }
+      if (!ownImages.has(image.url)) ownImages.set(image.url, { url: image.url, width: image.width, height: image.height });
     }
 
     const invalid = (message: string): UpdatePollContentResult => ({ ok: false, reason: "invalid_change", message });
@@ -215,6 +209,9 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
 
     if (poll.mode === "self_service" && (input.questions.length !== 1 || input.questions[0].id !== questionRows[0]?.id)) {
       return invalid("Anketa pro web má právě jednu otázku.");
+    }
+    if (poll.mode === "self_service" && input.questions[0].images.length > 1) {
+      return invalid("Anketa pro web může mít jen jeden obrázek.");
     }
 
     // 1) Nejdřív všechno ověřit, teprve pak zapisovat.
@@ -248,11 +245,11 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         return invalid(`${label}: neplatná odpověď. Načtěte stránku znovu.`);
       }
 
-      if (question.image && question.image.url !== current?.imageUrl) {
-        const own = ownImages.get(question.image.url);
+      // Rozměry vždy podle evidence, ne podle klienta.
+      for (const [imageIndex, image] of question.images.entries()) {
+        const own = ownImages.get(image.url);
         if (!own) return invalid(`${label}: neplatný obrázek. Nahrajte ho prosím znovu.`);
-        // Rozměry podle evidence, ne podle klienta.
-        question.image = { ...question.image, width: own.width, height: own.height };
+        question.images[imageIndex] = { ...image, width: own.width, height: own.height };
       }
     }
 
@@ -366,15 +363,15 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
     // Obrázky, na které po uložení už nic neodkazuje (odstraněná otázka,
     // nahrazený/odebraný obrázek). Množinový rozdíl přes celý poll — stejný
     // obrázek může mít i duplikovaná otázka.
-    const stillUsed = new Set(
-      input.questions.map((question) => {
+    const stillUsed = new Set<string | null>(
+      input.questions.flatMap((question) => {
         const current = question.id === undefined ? undefined : existing.get(question.id);
-        return current && locked(current) ? current.imageUrl : question.image?.url ?? null;
+        return (current && locked(current) ? current.images : question.images).map((image) => image.url);
       })
     );
     stillUsed.add(backgroundAfter);
     pollId = poll.id;
-    removedImageUrls = [...[...existing.values()].map((question) => question.imageUrl), poll.backgroundImageUrl].filter(
+    removedImageUrls = [...[...existing.values()].flatMap((question) => question.images.map((image) => image.url)), poll.backgroundImageUrl].filter(
       (url): url is string => Boolean(url) && !stillUsed.has(url)
     );
 

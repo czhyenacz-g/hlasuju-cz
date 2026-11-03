@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import QuestionImage from "./QuestionImage.tsx";
+import { QuestionImages } from "./QuestionImage.tsx";
 import QuestionLink from "./QuestionLink.tsx";
 import ResultsBarChart, { votesLabel } from "./ResultsBarChart.tsx";
 import { getPersistentParticipantId } from "../lib/participant-id.ts";
@@ -148,8 +148,8 @@ function QuestionStep({
     <div>
       {poll.title && <p className="text-sm font-semibold text-brand">{poll.title}</p>}
       <Heading className={`mt-1 font-bold text-gray-900 ${embed ? "text-xl" : "text-2xl sm:text-3xl"}`}>{question.text}</Heading>
-      {question.image && (
-        <QuestionImage image={question.image} maxHeightClass={embed ? "max-h-48" : "max-h-[32vh] sm:max-h-[40vh]"} className="mt-4" priority={!embed} />
+      {question.images.length > 0 && (
+        <QuestionImages images={question.images} maxHeightClass={embed ? "max-h-48" : "max-h-[32vh] sm:max-h-[40vh]"} className="mt-4" priority={!embed} />
       )}
       <div className="mt-5 flex flex-col gap-2.5">
         {question.options.map((option) => (

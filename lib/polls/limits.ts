@@ -27,6 +27,9 @@ export const LIMITS = {
   MAX_LINK_LABEL_LENGTH: 100,
   MAX_IMAGE_URL_LENGTH: 1000,
   MAX_IMAGE_ALT_LENGTH: 300,
+  // Obrázky na jednom slajdu (otázka / obsah), zobrazí se vedle sebe.
+  // Anketa pro web má jen jeden.
+  MAX_IMAGES_PER_SLIDE: 3,
   // Server přijme max 4 MB — Vercel Functions mají limit těla požadavku
   // 4,5 MB, takže víc přes vlastní API stejně neprojde. Prohlížeč větší
   // fotky před nahráním zmenší (lib/images/prepare-image.ts), proto si

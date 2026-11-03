@@ -70,11 +70,13 @@ export async function runCleanup(now: Date = new Date()): Promise<CleanupSummary
             // Kopie prezentace (nový běh, lib/polls/duplicate-poll.ts) sdílí
             // obrázky originálu — nemazat, dokud je používá platné hlasování.
             sql`not exists (select 1 from ${questions} q join ${polls} p on p.id = q.poll_id where q.image_url = ${pollImages.url} and p.expires_at >= ${new Date(now.getTime() - EXPIRED_GRACE_MS).toISOString()}::timestamptz)`,
+            sql`not exists (select 1 from ${questions} q join ${polls} p on p.id = q.poll_id where q.extra_images @> jsonb_build_array(jsonb_build_object('url', ${pollImages.url})) and p.expires_at >= ${new Date(now.getTime() - EXPIRED_GRACE_MS).toISOString()}::timestamptz)`,
             sql`not exists (select 1 from ${polls} p where p.background_image_url = ${pollImages.url} and p.expires_at >= ${new Date(now.getTime() - EXPIRED_GRACE_MS).toISOString()}::timestamptz)`
           ),
           and(
             lt(pollImages.createdAt, new Date(now.getTime() - ORPHAN_GRACE_MS)),
             sql`not exists (select 1 from ${questions} where ${questions.imageUrl} = ${pollImages.url})`,
+            sql`not exists (select 1 from ${questions} q where q.extra_images @> jsonb_build_array(jsonb_build_object('url', ${pollImages.url})))`,
             sql`not exists (select 1 from ${polls} p where p.background_image_url = ${pollImages.url})`
           )
         )

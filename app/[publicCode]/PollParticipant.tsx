@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { usePolling } from "../../lib/use-polling.ts";
 import { getOrCreateParticipantId } from "../../lib/participant-id.ts";
 import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx";
-import QuestionImage from "../../components/QuestionImage.tsx";
+import { QuestionImages } from "../../components/QuestionImage.tsx";
 import QuestionLink from "../../components/QuestionLink.tsx";
 import ResultsBarChart from "../../components/ResultsBarChart.tsx";
 import { LIMITS } from "../../lib/polls/limits.ts";
@@ -253,8 +253,8 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 py-6 sm:py-10">
       <div className="w-full max-w-md">
-        {activeQuestion.image && (
-          <QuestionImage image={activeQuestion.image} maxHeightClass="max-h-[32vh] sm:max-h-[40vh]" className="mb-5" priority />
+        {activeQuestion.images.length > 0 && (
+          <QuestionImages images={activeQuestion.images} maxHeightClass="max-h-[32vh] sm:max-h-[40vh]" className="mb-5" priority />
         )}
         <h1 className="text-center text-2xl font-bold text-gray-900 sm:text-3xl">{activeQuestion.text}</h1>
 
@@ -478,9 +478,9 @@ function FinalResultsSection({ publicCode, participantId }: { publicCode: string
             {q.participantSelectedOptionId === null && (
               <p className="mt-2 text-sm text-gray-500">Na tuto otázku jste nehlasoval/a.</p>
             )}
-            {q.image && (
+            {q.images.length > 0 && (
               <div className="mt-3">
-                <QuestionImage image={q.image} maxHeightClass="max-h-56" />
+                <QuestionImages images={q.images} maxHeightClass="max-h-56" />
               </div>
             )}
             <div className="mt-4">

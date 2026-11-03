@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { pollImages, polls, questions } from "../../db/schema.ts";
 import { getImageStorage, ImageStorageError, type ImageStorage } from "./storage.ts";
@@ -58,6 +58,13 @@ export async function deleteUnusedPollImagesQuietly(pollId: number, urls: string
     const candidateUrls = candidates.map((row) => row.url);
     const stillUsed = new Set([
       ...(await db.select({ url: questions.imageUrl }).from(questions).where(inArray(questions.imageUrl, candidateUrls))).map((row) => row.url),
+      // 2. a 3. obrázek slajdu (jsonb pole objektů s `url`).
+      ...(
+        await db
+          .select({ extraImages: questions.extraImages })
+          .from(questions)
+          .where(or(...candidateUrls.map((url) => sql`${questions.extraImages} @> ${JSON.stringify([{ url }])}::jsonb`)))
+      ).flatMap((row) => (row.extraImages ?? []).map((image) => image.url)),
       // Pozadí prezentace (i kopie pro nový běh).
       ...(await db.select({ url: polls.backgroundImageUrl }).from(polls).where(inArray(polls.backgroundImageUrl, candidateUrls))).map((row) => row.url),
     ]);
