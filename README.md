@@ -35,7 +35,8 @@ Hlasování automaticky "vyprší" 30 dní po vytvoření (respektuje se při
   oknech chrání `polls.version` (starší verze se odmítne, nic se tiše
   nepřepíše).
 - **Obrázky** u otázek (JPEG/PNG/WebP; GIF se převede na statický
-  obrázek; SVG nikdy; max. 4 MB po zmenšení v prohlížeči) jsou v
+  obrázek; SVG nikdy; prohlížeč zmenší na max. 4096 px, příp. 2400 px,
+  a max. 4 MB) jsou v
   Universal Content API (`content-api.darbujan.com`), v DB je jen URL +
   evidence uploadů (`poll_images`). Prohlížeč nahrává na náš endpoint
   s moderátorským tokenem, server teprve pak posílá soubor do Content API

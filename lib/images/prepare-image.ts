@@ -23,7 +23,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number):
  * Připraví obrázek k nahrání v prohlížeči (běží jen na klientu):
  * - ověří typ (JPEG/PNG/WebP/GIF; SVG nikdy) a že jde obrázek dekódovat
  *   (poškozený soubor se odmítne hned, ne až na serveru),
- * - velkou fotku zmenší na max. 2400 px delší strany a překóduje
+ * - velkou fotku zmenší na max. 4096 px delší strany a překóduje
  *   (WebP, fallback JPEG) — rychlé načtení na mobilech studentů a
  *   splnění 4MB limitu serveru. Menší obrázky posílá beze změny
  *   (žádná zbytečná ztráta kvality). GIF úložiště (Content API)
@@ -55,34 +55,40 @@ export async function prepareImage(file: File): Promise<PrepareImageResult> {
     return { ok: true, image: { blob: file, previewUrl: sourceUrl, width, height } };
   }
 
-  const scale = Math.min(1, maxDimension / Math.max(width, height));
-  const targetWidth = Math.max(1, Math.round(width * scale));
-  const targetHeight = Math.max(1, Math.round(height * scale));
+  // Nejdřív plné rozlišení; když se ani při nižší kvalitě nevejde do 4 MB
+  // (hodně detailní fotka), zkusí se menší rozměr — ten dřív stačil vždy,
+  // takže zvýšení limitu nerozbije nahrání žádného obrázku, který dřív prošel.
   const canvas = document.createElement("canvas");
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
   const context = canvas.getContext("2d");
   if (!context) {
     URL.revokeObjectURL(sourceUrl);
     return { ok: false, error: "Obrázek se nepodařilo zpracovat." };
   }
-  context.imageSmoothingQuality = "high";
-  context.drawImage(image, 0, 0, targetWidth, targetHeight);
-  URL.revokeObjectURL(sourceUrl);
+  for (const limit of [maxDimension, LIMITS.IMAGE_RESIZE_FALLBACK_DIMENSION]) {
+    const scale = Math.min(1, limit / Math.max(width, height));
+    const targetWidth = Math.max(1, Math.round(width * scale));
+    const targetHeight = Math.max(1, Math.round(height * scale));
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, 0, 0, targetWidth, targetHeight);
 
-  for (const quality of [0.9, 0.82, 0.72]) {
-    let blob = await canvasToBlob(canvas, "image/webp", quality);
-    // Starší Safari WebP neumí zakódovat a vrátí PNG — pak JPEG.
-    if (!blob || blob.type !== "image/webp") {
-      context.globalCompositeOperation = "destination-over";
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, targetWidth, targetHeight);
-      context.globalCompositeOperation = "source-over";
-      blob = await canvasToBlob(canvas, "image/jpeg", quality);
-    }
-    if (blob && blob.size <= LIMITS.MAX_IMAGE_BYTES) {
-      return { ok: true, image: { blob, previewUrl: URL.createObjectURL(blob), width: targetWidth, height: targetHeight } };
+    for (const quality of [0.9, 0.82, 0.72]) {
+      let blob = await canvasToBlob(canvas, "image/webp", quality);
+      // Starší Safari WebP neumí zakódovat a vrátí PNG — pak JPEG.
+      if (!blob || blob.type !== "image/webp") {
+        context.globalCompositeOperation = "destination-over";
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, targetWidth, targetHeight);
+        context.globalCompositeOperation = "source-over";
+        blob = await canvasToBlob(canvas, "image/jpeg", quality);
+      }
+      if (blob && blob.size <= LIMITS.MAX_IMAGE_BYTES) {
+        URL.revokeObjectURL(sourceUrl);
+        return { ok: true, image: { blob, previewUrl: URL.createObjectURL(blob), width: targetWidth, height: targetHeight } };
+      }
     }
   }
+  URL.revokeObjectURL(sourceUrl);
   return { ok: false, error: "Obrázek se nepodařilo zmenšit pod 4 MB." };
 }

@@ -33,9 +33,12 @@ export const LIMITS = {
   // uživatel může vybrat i větší originál.
   MAX_IMAGE_BYTES: 4 * 1024 * 1024,
   MAX_ORIGINAL_IMAGE_BYTES: 25 * 1024 * 1024,
-  // Delší strana po zmenšení v prohlížeči — pořád víc než Full HD
-  // projektor, detaily fotek (např. zranění) zůstanou čitelné.
-  IMAGE_RESIZE_MAX_DIMENSION: 2400,
+  // Delší strana po zmenšení v prohlížeči — pokryje i 4K projektor
+  // a přiblížení na telefonu (detailní snímky, např. rentgen). Velikost
+  // souboru dál hlídá MAX_IMAGE_BYTES (pevný strop hostingu).
+  IMAGE_RESIZE_MAX_DIMENSION: 4096,
+  // Záložní rozměr, když se snímek ve 4096 px nevejde do 4 MB (původní limit).
+  IMAGE_RESIZE_FALLBACK_DIMENSION: 2400,
   MAX_IMAGE_DIMENSION: 8000,
 
   // Horní meze velikosti JSON těla požadavků (lib/http.ts).
