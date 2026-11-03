@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, participants, polls, questions, votes } from "../../db/schema.ts";
 import { extendedExpiresAt } from "./expiry.ts";
@@ -7,7 +7,10 @@ import { LIMITS } from "./limits.ts";
 
 export type CastVoteResult =
   | { ok: true }
-  | { ok: false; reason: "poll_not_found" | "poll_closed" | "question_not_active" | "option_not_found" | "invalid_participant" | "name_required" };
+  | {
+      ok: false;
+      reason: "poll_not_found" | "poll_closed" | "question_not_active" | "option_not_found" | "invalid_participant" | "name_required" | "time_up";
+    };
 
 const MAX_PARTICIPANT_ID_LENGTH = 64;
 
@@ -83,17 +86,23 @@ export async function castVote(
   try {
     const accepted = await db.transaction(async (tx) => {
       const statusQuery = tx
-        .select({ id: questions.id })
+        .select({
+          id: questions.id,
+          // Odpočet: rozhodují hodiny databáze, ne telefon (s malou rezervou na síť).
+          timeUp: sql<boolean>`coalesce(${questions.answerDeadline} + make_interval(secs => ${LIMITS.TIME_LIMIT_GRACE_MS / 1000}) < now(), false)`,
+        })
         .from(questions)
         .where(and(eq(questions.id, questionId), eq(questions.status, "active")))
         .limit(1);
       const [open] = poll.mode === "live" ? await statusQuery.for("share") : await statusQuery;
-      if (!open) return false;
+      if (!open) return "closed" as const;
+      if (open.timeUp) return "time_up" as const;
       // Už hlasoval(a) u téhle otázky — bereme jako úspěch (idempotentní).
       await tx.insert(votes).values({ questionId, optionId, participantId }).onConflictDoNothing({ target: [votes.questionId, votes.participantId] });
-      return true;
+      return "ok" as const;
     });
-    if (!accepted) return { ok: false, reason: "question_not_active" };
+    if (accepted === "closed") return { ok: false, reason: "question_not_active" };
+    if (accepted === "time_up") return { ok: false, reason: "time_up" };
   } catch (error) {
     const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: string }).code : undefined;
     // 23503: odpověď mezitím odstranila editace veřejné ankety (před prvním hlasem).

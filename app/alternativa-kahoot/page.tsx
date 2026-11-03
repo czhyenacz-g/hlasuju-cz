@@ -58,7 +58,7 @@ const ROWS: ComparisonRow[] = [
   },
   {
     label: "Časový limit otázky",
-    us: "Ne – otázku ukončuje moderátor.",
+    us: "Volitelně, 3 sekundy až 10 minut. Bez limitu otázku ukončuje moderátor.",
     them: "Ano, 5 sekund až 4 minuty.",
   },
   {
@@ -81,11 +81,12 @@ export default function KahootAlternativePage() {
         }
       />
 
-      <Section title="Kvíz bez hry na čas">
+      <Section title="Kvíz, kde čas jen pomáhá">
         <p>
-          Kahoot! je postavený na rychlosti: otázka má odpočet a body klesají s každou vteřinou. Hlasuju.cz je klidnější. Otázku ukončíte,
-          až když odpoví všichni, a body dostane každý, kdo odpověděl správně. Kdo chce soutěživost, zapne u otázky bonus za rychlost – první
-          tři správné odpovědi dostanou navíc 3, 2 a 1 bod.
+          Kahoot! je postavený na rychlosti: otázka má odpočet a body klesají s každou vteřinou. Hlasuju.cz je klidnější. Body dostane
+          každý, kdo odpověděl správně, a otázku můžete ukončit, až když odpoví všichni. Kdo chce soutěživost, nastaví u otázky odpočet
+          (např. 10 sekund – pak už se odpovědi nepřijímají) nebo zapne bonus za rychlost: první tři správné odpovědi dostanou navíc 3, 2
+          a 1 bod.
         </p>
         <ComparisonTable competitor="Kahoot!" rows={ROWS} caption="Srovnání Hlasuju.cz a Kahoot!" />
       </Section>
@@ -114,7 +115,7 @@ export default function KahootAlternativePage() {
           items={[
             "Máte ve třídě nebo na akci víc hráčů, než dovoluje bezplatný tarif Kahootu.",
             "Nechcete zakládat účet a kvíz potřebujete jednorázově – na školení, večírek nebo táborový program.",
-            "Chcete kvíz bez stresu z odpočtu, kde rozhoduje hlavně správnost, a rychlost jen jako bonus.",
+            "Chcete kvíz, kde rozhoduje hlavně správnost – odpočet a bonus za rychlost zapnete jen u otázek, kde se hodí.",
             "Potřebujete mezi otázky vložit vysvětlující slajd s textem a obrázkem.",
           ]}
         />
@@ -123,7 +124,7 @@ export default function KahootAlternativePage() {
       <Section title="Kdy může být vhodnější Kahoot!">
         <Bullets
           items={[
-            "Chcete opravdovou hru s odpočtem času a bodováním podle rychlosti každé odpovědi.",
+            "Chcete opravdovou hru, kde body plynule klesají s každou vteřinou odpovědi.",
             "Potřebujete jiné typy otázek: víc správných odpovědí, puzzle nebo otevřenou odpověď (část z nich jen v placených tarifech).",
             "Chcete zadávat kvízy jako domácí úkol, který žáci plní každý svým tempem. Hlasuju.cz počítá s živým kvízem s moderátorem.",
           ]}
@@ -143,7 +144,7 @@ export default function KahootAlternativePage() {
             },
             {
               q: "Je otázka omezená časem?",
-              a: "Ne. Otázku ukončíte sami tlačítkem nebo klávesou. Rychlost můžete odměnit bonusem, ale nikoho čas nevyřadí.",
+              a: "Jen když chcete. U otázky nastavíte odpočet v sekundách (3 s až 10 min). Odpočet běží na plátně i v telefonech a po jeho konci server další odpovědi nepřijme. Bez odpočtu otázku ukončíte sami tlačítkem nebo klávesou.",
             },
             {
               q: "Můžu kvíz zopakovat s jinou třídou?",

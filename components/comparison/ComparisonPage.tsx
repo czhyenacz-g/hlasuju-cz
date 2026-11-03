@@ -12,7 +12,7 @@ import { SITE_NAME, SITE_URL } from "../../app/config/site.ts";
  * v app/sitemap.ts.
  */
 export const COMPARISON_VERIFIED_AT = "2. 11. 2026";
-export const COMPARISON_LAST_MODIFIED = new Date("2026-11-02");
+export const COMPARISON_LAST_MODIFIED = new Date("2026-11-03");
 
 export function comparisonMetadata(path: string, title: string, description: string): Metadata {
   const url = `${SITE_URL}${path}`;

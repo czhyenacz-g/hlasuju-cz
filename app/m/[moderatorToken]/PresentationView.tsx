@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import CountdownBadge from "../../../components/CountdownBadge.tsx";
 import QrCode from "../../../components/QrCode.tsx";
 import { QuestionImages } from "../../../components/QuestionImage.tsx";
 import QuestionLink from "../../../components/QuestionLink.tsx";
 import ResultsBarChart from "../../../components/ResultsBarChart.tsx";
 import SlideBody from "../../../components/SlideBody.tsx";
 import { LIMITS } from "../../../lib/polls/limits.ts";
+import { useCountdown } from "../../../lib/polls/use-countdown.ts";
 import { confirmReopen, type ModeratorAction } from "./QuestionControls.tsx";
 import type { ModeratorPollView, ModeratorQuestionView } from "../../../lib/polls/types.ts";
 
@@ -73,6 +75,7 @@ export default function PresentationView({
 
   const isQuestion = slide.kind === "question";
   const showResults = resultsOverride?.slideId === slide.id ? resultsOverride.visible : slide.status === "ended";
+  const secondsLeft = useCountdown(slide.kind === "question" && slide.status === "active" ? slide.id : null, slide.remainingMs);
 
   const previous = poll.questions[slideIndex - 1];
   const next = poll.questions[slideIndex + 1];
@@ -153,9 +156,12 @@ export default function PresentationView({
           Hlasujte na <span className="font-bold text-gray-900">hlasuju.cz</span> · kód{" "}
           <span className="font-bold tracking-widest text-brand">{formatCode(poll.publicCode)}</span>
         </p>
-        <p className="text-base font-semibold text-gray-500 lg:text-xl">
+        <p className="flex items-center text-base font-semibold text-gray-500 lg:text-xl">
           {slideIndex + 1} / {poll.questions.length}
-          {isQuestion && slide.status === "active" && <span className="ml-3 text-green-700">● odpovídá se</span>}
+          {isQuestion && slide.status === "active" && secondsLeft === null && <span className="ml-3 text-green-700">● odpovídá se</span>}
+          {isQuestion && slide.status === "active" && secondsLeft !== null && (
+            <CountdownBadge seconds={secondsLeft} className="ml-4 h-12 min-w-12 px-3 text-2xl lg:h-16 lg:min-w-16 lg:text-4xl" />
+          )}
           {isQuestion && slide.status === "ended" && <span className="ml-3 text-gray-500">odpovídání ukončeno</span>}
         </p>
       </header>
@@ -275,12 +281,25 @@ export default function PresentationView({
   );
 }
 
+// Odpovědi pod obrázky: vyrovnané řádky (4 = 2 × 2, nikdy 3 + 1).
+// Celé názvy tříd kvůli Tailwindu (dynamicky složené by se nevygenerovaly).
+const STACKED_OPTION_COLUMNS: Record<number, number> = { 2: 2, 3: 3, 4: 2, 5: 3, 6: 3, 7: 4, 8: 4, 9: 5, 10: 5 };
+const GRID_COLUMNS_CLASS: Record<number, string> = {
+  2: "lg:grid-cols-2",
+  3: "lg:grid-cols-3",
+  4: "lg:grid-cols-4",
+  5: "lg:grid-cols-5",
+};
+
 function QuestionSlide({ slide, showResults }: { slide: ModeratorQuestionView; showResults: boolean }) {
   const linkVisible = slide.link && (slide.status === "ended" || slide.link.showDuringVoting);
   // Víc obrázků (např. snímky k porovnání): obrázky přes celou šířku,
   // odpovědi pod nimi v řádku — ve sloupci vedle by byly obrázky malé.
   const stacked = slide.images.length > 1;
   const hasImages = slide.images.length > 0;
+  const columns = STACKED_OPTION_COLUMNS[slide.options.length] ?? 5;
+  // Dva řádky odpovědí = menší obrázky, aby se vše vešlo i na 1280×720.
+  const twoRows = Math.ceil(slide.options.length / columns) > 1;
   const answers = showResults ? (
     <>
       <ResultsBarChart
@@ -294,13 +313,23 @@ function QuestionSlide({ slide, showResults }: { slide: ModeratorQuestionView; s
       <FastestList fastest={slide.fastest} />
     </>
   ) : (
-    <ol className={stacked ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3 lg:gap-4"}>
+    <ol className={stacked ? `grid gap-3 sm:grid-cols-2 ${GRID_COLUMNS_CLASS[columns]}` : "flex flex-col gap-3 lg:gap-4"}>
       {slide.options.map((option, index) => (
-        <li key={option.id} className="flex items-center gap-4 rounded-2xl border-2 border-gray-200 bg-white/80 px-5 py-3 lg:px-6 lg:py-4">
+        <li
+          key={option.id}
+          className={`flex items-center gap-4 rounded-2xl border-2 border-gray-200 bg-white/80 px-5 lg:px-6 ${stacked && twoRows ? "py-2 lg:py-2.5" : "py-3 lg:py-4"}`}
+        >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-xl font-bold text-white lg:h-12 lg:w-12 lg:text-2xl">
             {LETTERS[index]}
           </span>
-          <span className={`min-w-0 break-words text-2xl font-medium ${hasImages ? "lg:text-3xl" : "lg:text-4xl"}`}>{option.text}</span>
+          <span
+            className={`min-w-0 break-words text-2xl font-medium ${
+              // Ve 4–5 sloupcích je odpověď úzká — menší písmo, ať se slova nelámou.
+              stacked && columns >= 4 ? "xl:text-3xl" : hasImages ? "lg:text-3xl" : "lg:text-4xl"
+            }`}
+          >
+            {option.text}
+          </span>
         </li>
       ))}
     </ol>
@@ -311,7 +340,7 @@ function QuestionSlide({ slide, showResults }: { slide: ModeratorQuestionView; s
       <>
         <h1 className="text-3xl font-bold leading-tight lg:text-4xl xl:text-5xl">{slide.text}</h1>
         <div className="mt-4 flex flex-1 flex-col justify-center gap-5 lg:gap-6">
-          <QuestionImages images={slide.images} fitHeight={showResults ? "min(36vh, 100vh - 34rem)" : "min(50vh, 100vh - 24rem)"} priority />
+          <QuestionImages images={slide.images} fitHeight={showResults ? "min(36vh, 100vh - 34rem)" : twoRows ? "min(40vh, 100vh - 30rem)" : "min(50vh, 100vh - 24rem)"} priority />
           <div className="flex min-w-0 flex-col gap-4">
             {answers}
             {linkVisible && slide.link && <QuestionLink link={slide.link} large />}

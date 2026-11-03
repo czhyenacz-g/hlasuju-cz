@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { polls, questions } from "../../db/schema.ts";
 import { extendedExpiresAt } from "./expiry.ts";
@@ -59,7 +59,8 @@ export async function navigateSlide(moderatorToken: string, fromSlideId: number 
       .where(and(eq(questions.pollId, poll.id), eq(questions.status, "active")));
 
     if (target.kind === "question" && target.status === "prepared") {
-      await tx.update(questions).set({ status: "active" }).where(eq(questions.id, target.id));
+      // Odpočet běží od otevření (hodiny databáze, viz cast-vote.ts).
+      await tx.update(questions).set({ status: "active", answerDeadline: sql`case when ${questions.timeLimitSeconds} is null then null else now() + make_interval(secs => ${questions.timeLimitSeconds}) end` }).where(eq(questions.id, target.id));
     }
 
     await tx.update(polls).set({ activeQuestionId: target.id, expiresAt: extendedExpiresAt() }).where(eq(polls.id, poll.id));

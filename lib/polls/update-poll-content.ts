@@ -19,6 +19,7 @@ type ExistingQuestion = {
   body: string | null;
   points: number;
   speedBonus: boolean;
+  timeLimitSeconds: number | null;
   status: QuestionStatus;
   images: QuestionImage[];
   linkUrl: string | null;
@@ -54,6 +55,7 @@ function sameLockedContent(existing: ExistingQuestion, input: UpdatePollQuestion
       ? (existing.linkLabel ?? null) === (link?.label ?? null) && existing.linkShowDuringVoting === (link?.showDuringVoting ?? false)
       : true) &&
     // Správná odpověď spuštěné otázky je zamčená stejně jako odpovědi.
+    existing.timeLimitSeconds === (input.timeLimitSeconds ?? null) &&
     existing.correctOptionId === (input.correctOptionIndex === null ? null : (input.options[input.correctOptionIndex]?.id ?? null)) &&
     // Body už odehrané otázky by zpětně změnily žebříček.
     (existing.correctOptionId === null || (existing.points === (input.points ?? 1) && existing.speedBonus === (input.speedBonus ?? false)))
@@ -67,6 +69,7 @@ function questionColumns(input: UpdatePollQuestionInput, position: number) {
     body: input.body ?? null,
     points: input.points ?? 1,
     speedBonus: input.speedBonus ?? false,
+    timeLimitSeconds: input.timeLimitSeconds ?? null,
     position,
     ...questionImageColumns(input.images),
     linkUrl: input.link?.url ?? null,
@@ -126,6 +129,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         body: questions.body,
         points: questions.points,
         speedBonus: questions.speedBonus,
+        timeLimitSeconds: questions.timeLimitSeconds,
         ...questionMediaColumns,
       })
       .from(questions)
@@ -166,6 +170,7 @@ export async function updatePollContent(moderatorToken: string, input: UpdatePol
         body: row.body,
         points: row.points,
         speedBonus: row.speedBonus,
+        timeLimitSeconds: row.timeLimitSeconds,
         status: row.status as QuestionStatus,
         images: toQuestionImages(row),
         linkUrl: row.linkUrl,

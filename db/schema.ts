@@ -108,6 +108,11 @@ export const questions = pgTable(
     // Bonus za rychlost: první tři správné odpovědi (podle času zápisu na
     // serveru) dostanou navíc +3/+2/+1 (lib/polls/leaderboard.ts).
     speedBonus: boolean("speed_bonus").notNull().default(false),
+    // Odpočet na odpověď v sekundách (NULL = bez limitu). Při otevření
+    // otázky se nastaví answer_deadline = now() + limit (čas databáze);
+    // po něm cast-vote.ts hlasy odmítá. Znovuotevření = nový odpočet.
+    timeLimitSeconds: integer("time_limit_seconds"),
+    answerDeadline: timestamp("answer_deadline", { withTimezone: true }),
   },
   (table) => [index("questions_poll_id_idx").on(table.pollId)]
 );

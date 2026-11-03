@@ -260,6 +260,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
         resultsQuestionIndex,
         points: 1,
         speedBonus: false,
+        timeLimitSeconds: null,
       });
       continue;
     }
@@ -335,6 +336,16 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
     }
     const speedBonus = q.speedBonus === true && correctOptionIndex !== null;
 
+    // Odpočet na odpověď (sekundy), null = bez limitu.
+    let timeLimitSeconds: number | null = null;
+    if (q.timeLimitSeconds !== undefined && q.timeLimitSeconds !== null) {
+      const value = q.timeLimitSeconds;
+      if (!Number.isInteger(value) || (value as number) < LIMITS.MIN_TIME_LIMIT_SECONDS || (value as number) > LIMITS.MAX_TIME_LIMIT_SECONDS) {
+        return { ok: false, error: `${prefix}: odpočet musí být celé číslo ${LIMITS.MIN_TIME_LIMIT_SECONDS}–${LIMITS.MAX_TIME_LIMIT_SECONDS} sekund.` };
+      }
+      timeLimitSeconds = value as number;
+    }
+
     questions.push({
       ...(id === undefined ? {} : { id }),
       kind,
@@ -347,6 +358,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       resultsQuestionIndex: null,
       points,
       speedBonus,
+      timeLimitSeconds,
     });
   }
 
@@ -421,6 +433,7 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
         resultsQuestionIndex: q.resultsQuestionIndex,
         points: q.points,
         speedBonus: q.speedBonus,
+        timeLimitSeconds: q.timeLimitSeconds,
       })),
     },
   };

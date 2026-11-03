@@ -33,7 +33,7 @@ export async function resetPoll(moderatorToken: string): Promise<ResetPollResult
     // Veřejná anketa nemá promítání — její hlasy jsou skutečné výsledky.
     if (poll.mode !== "live") return { ok: false, reason: "not_live" };
 
-    await tx.update(questions).set({ status: "prepared" }).where(eq(questions.pollId, poll.id));
+    await tx.update(questions).set({ status: "prepared", answerDeadline: null }).where(eq(questions.pollId, poll.id));
 
     const pollQuestionIds = tx.select({ id: questions.id }).from(questions).where(eq(questions.pollId, poll.id));
     await tx.delete(votes).where(inArray(votes.questionId, pollQuestionIds));

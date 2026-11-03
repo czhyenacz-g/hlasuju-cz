@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { questions } from "../../db/schema.ts";
 import type { BackgroundImage, PublicQuestionLink, QuestionImage, QuestionLink } from "./types.ts";
 
@@ -65,4 +66,14 @@ export function toQuestionLink(row: MediaRow): QuestionLink | null {
 
 export function toPublicLink(link: QuestionLink | null): PublicQuestionLink | null {
   return link ? { url: link.url, label: link.label } : null;
+}
+
+/**
+ * Zbývající čas odpočtu v ms podle hodin databáze (stejné hodiny, podle
+ * kterých cast-vote.ts hlasy odmítá). NULL = otázka nemá běžící odpočet.
+ */
+export const remainingMsColumn = sql<string | number | null>`case when ${questions.answerDeadline} is null then null else greatest(0, round(extract(epoch from (${questions.answerDeadline} - now())) * 1000)) end`;
+
+export function toRemainingMs(value: string | number | null): number | null {
+  return value === null ? null : Number(value);
 }

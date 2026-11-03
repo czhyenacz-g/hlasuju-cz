@@ -29,6 +29,8 @@ export type CreatePollQuestionInput = {
   points?: number;
   /** Bonus +3/+2/+1 pro první tři správné odpovědi (výchozí false). */
   speedBonus?: boolean;
+  /** Odpočet na odpověď v sekundách, null = bez limitu. */
+  timeLimitSeconds?: number | null;
 };
 export type CreatePollInput = {
   title?: string;
@@ -58,6 +60,7 @@ export type UpdatePollQuestionInput = {
   resultsQuestionIndex?: number | null;
   points?: number;
   speedBonus?: boolean;
+  timeLimitSeconds?: number | null;
 };
 /** Obrázek na pozadí promítání (bez popisu — je dekorativní). */
 export type BackgroundImage = { url: string; width: number; height: number };
@@ -89,16 +92,19 @@ export type PublicPollView = {
     id: number;
     text: string;
     /** 0–3 obrázky slajdu (zobrazí se vedle sebe), první = hlavní. */
-  images: QuestionImage[];
+    images: QuestionImage[];
     /** Jen pokud ho moderátor povolil ukázat už během hlasování. */
     link: PublicQuestionLink | null;
     options: { id: number; text: string }[];
+    /** Odpočet: kolik ms zbývá podle času serveru (null = bez limitu). 0 = čas vypršel. */
+    remainingMs: number | null;
+    timeLimitSeconds: number | null;
   } | null;
   closedQuestion: {
     id: number;
     text: string;
     /** 0–3 obrázky slajdu (zobrazí se vedle sebe), první = hlavní. */
-  images: QuestionImage[];
+    images: QuestionImage[];
     link: PublicQuestionLink | null;
     options: { id: number; text: string }[];
     /** Jen tady (otázka ukončená) — nikdy v `activeQuestion`. */
@@ -131,6 +137,9 @@ export type ModeratorQuestionView = {
   resultsQuestionId: number | null;
   points: number;
   speedBonus: boolean;
+  timeLimitSeconds: number | null;
+  /** Odpočet běžící otázky: zbývající ms podle času serveru (null = bez odpočtu / neběží). */
+  remainingMs: number | null;
   /** Jen u uzavřené otázky s bonusem za rychlost: nejrychlejší správné odpovědi. */
   fastest: { label: string; bonus: number }[] | null;
   /** Jen u slajdu žebříčku. */
@@ -170,6 +179,7 @@ export type EditorQuestion = {
   resultsQuestionId: number | null;
   points: number;
   speedBonus: boolean;
+  timeLimitSeconds: number | null;
   status: QuestionStatus;
   locked: boolean;
   voteCount: number;
