@@ -133,9 +133,18 @@ export function QuestionImages({
   if (images.length === 0) return null;
   if (images.length === 1) return <QuestionImage image={images[0]} className={className} {...props} />;
   return (
-    <div className={`flex items-center justify-center gap-2 sm:gap-3 ${className}`}>
+    <div className={`flex items-center justify-center gap-1 sm:gap-1.5 ${className}`}>
       {images.map((image) => (
-        <div key={image.url} className="min-w-0" style={{ flex: `${image.width / image.height} 1 0%` }}>
+        <div
+          key={image.url}
+          className="min-w-0"
+          style={{
+            flex: `${image.width / image.height} 1 0%`,
+            // Omezené výškou: buňka jen tak široká jako obrázek, aby mezi
+            // obrázky nezůstávalo volné místo (zůstane jen `gap`).
+            ...(props.fitHeight ? { maxWidth: `calc(${props.fitHeight} * ${image.width / image.height})` } : {}),
+          }}
+        >
           <QuestionImage image={image} {...props} />
         </div>
       ))}
