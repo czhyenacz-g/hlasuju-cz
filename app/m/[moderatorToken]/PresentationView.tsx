@@ -138,19 +138,8 @@ export default function PresentationView({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white text-gray-900">
-      {poll.backgroundImage && (
-        // Pozadí celé prezentace — bez ztlumení (přání autora); čitelnost
-        // textu je na volbě obrázku, odpovědi mají vlastní bílý podklad.
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          {/* eslint-disable-next-line @next/next/no-img-element -- obrázek z Content API, jen dekorace */}
-          <img src={poll.backgroundImage.url} alt="" className="h-full w-full object-cover" />
-        </div>
-      )}
       <header
-        className={`relative flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-gray-100 px-6 py-3 lg:px-12 ${
-          // S pozadím (bez ztlumení) mají lišty vlastní podklad, aby kód a ovládání zůstaly čitelné.
-          poll.backgroundImage ? "bg-white/85 backdrop-blur-sm" : ""
-        }`}
+        className="relative flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-gray-100 px-6 py-3 lg:px-12"
       >
         <p className="text-lg text-gray-600 lg:text-2xl">
           Hlasujte na <span className="font-bold text-gray-900">hlasuju.cz</span> · kód{" "}
@@ -166,17 +155,26 @@ export default function PresentationView({
         </p>
       </header>
 
-      <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5 lg:px-12 lg:py-6">
-        {slide.kind === "question" && <QuestionSlide slide={slide} showResults={showResults} />}
-        {slide.kind === "content" && <ContentSlide slide={slide} />}
-        {slide.kind === "results" && <ResultsSlide slide={slide} poll={poll} />}
-        {slide.kind === "leaderboard" && <LeaderboardSlide slide={slide} page={page} />}
-      </main>
+      {/* Pozadí jen v ploše slajdu mezi lištami — lišta s kódem ani
+          ovládání ho nepřekrývají. Bez ztlumení (přání autora); odpovědi
+          mají vlastní bílý podklad. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {poll.backgroundImage && (
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+            {/* eslint-disable-next-line @next/next/no-img-element -- obrázek z Content API, jen dekorace */}
+            <img src={poll.backgroundImage.url} alt="" className="h-full w-full object-cover" />
+          </div>
+        )}
+        <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5 lg:px-12 lg:py-6">
+          {slide.kind === "question" && <QuestionSlide slide={slide} showResults={showResults} />}
+          {slide.kind === "content" && <ContentSlide slide={slide} />}
+          {slide.kind === "results" && <ResultsSlide slide={slide} poll={poll} />}
+          {slide.kind === "leaderboard" && <LeaderboardSlide slide={slide} page={page} />}
+        </main>
+      </div>
 
       <footer
-        className={`relative flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-6 py-3 lg:px-12 ${
-          poll.backgroundImage ? "bg-white/85 backdrop-blur-sm" : ""
-        }`}
+        className="relative flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-6 py-3 lg:px-12"
       >
         <p className="text-xl font-semibold text-gray-700 lg:text-2xl">
           {isQuestion
