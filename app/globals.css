@@ -7,7 +7,9 @@
     @apply bg-cream text-gray-900 antialiased;
   }
 
+  /* Výběr textu: brand (#6558B4) na 30 % — viditelný na bílých polích
+     i krémovém pozadí (brand-light byl na bílé skoro neviditelný). */
   ::selection {
-    @apply bg-brand-light text-gray-900;
+    @apply bg-brand/30 text-gray-900;
   }
 }
