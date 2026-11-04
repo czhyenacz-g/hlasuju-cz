@@ -647,3 +647,45 @@ function withSlides(content: {
     }),
   };
 }
+
+describe("prezentace — Zpět z otevřené otázky", () => {
+  test("bez hlasů: otázka se vrátí do „připraveno“, Vpřed ji normálně otevře (správná odpověď se neprozradí)", async () => {
+    const { token, code, slides } = await createDeck();
+    const [intro, q1, r1, content2, q2] = slides;
+    assert.equal((await navigate(token, null, intro.id)).response.status, 200);
+    for (const [from, to] of [[intro, q1], [q1, r1], [r1, content2], [content2, q2]]) {
+      assert.equal((await navigate(token, from.id, to.id)).response.status, 200);
+    }
+    // q2 je otevřená, nikdo nehlasoval → Zpět.
+    assert.equal((await navigate(token, q2.id, content2.id)).response.status, 200);
+    const back = (await getModerator(token)).body.questions.find((q: ModSlide) => q.id === q2.id);
+    assert.equal(back.status, "prepared");
+    assert.equal((await getPublic(code)).body.closedQuestion, null);
+
+    // Vpřed → otevře se znovu, správná odpověď se účastníkům neposílá.
+    assert.equal((await navigate(token, content2.id, q2.id)).response.status, 200);
+    const open = (await getPublic(code)).body;
+    assert.equal(open.activeQuestion.id, q2.id);
+    assert.equal(open.closedQuestion, null);
+    assert.equal((await getModerator(token)).body.questions.find((q: ModSlide) => q.id === q2.id).status, "active");
+  });
+
+  test("s hlasy: Zpět otázku uzavře jako dřív (hlasy i výsledky zůstanou); Vpřed vždy uzavírá", async () => {
+    const { token, code, slides } = await createDeck();
+    const [intro, q1, r1] = slides;
+    await navigate(token, null, intro.id);
+    await navigate(token, intro.id, q1.id);
+    assert.equal((await vote(code, q1.id, q1.options[0].id, "p1")).response.status, 200);
+    await navigate(token, q1.id, intro.id);
+    const closed = (await getModerator(token)).body.questions.find((q: ModSlide) => q.id === q1.id);
+    assert.equal(closed.status, "ended");
+    assert.equal(closed.totalVotes, 1);
+
+    // Vpřed z otevřené otázky bez hlasů = běžné uzavření (beze změny).
+    const fresh = await createDeck();
+    await navigate(fresh.token, null, fresh.slides[1].id);
+    await navigate(fresh.token, fresh.slides[1].id, fresh.slides[2].id);
+    assert.equal((await getModerator(fresh.token)).body.questions[1].status, "ended");
+    assert.ok(r1);
+  });
+});

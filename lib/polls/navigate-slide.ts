@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
-import { polls, questions } from "../../db/schema.ts";
+import { polls, questions, votes } from "../../db/schema.ts";
 import { extendedExpiresAt } from "./expiry.ts";
 
 export type NavigateSlideResult =
@@ -42,7 +42,7 @@ export async function navigateSlide(moderatorToken: string, fromSlideId: number 
     if (poll.mode !== "live") return { ok: false, reason: "not_live" };
 
     const [target] = await tx
-      .select({ id: questions.id, kind: questions.kind, status: questions.status })
+      .select({ id: questions.id, kind: questions.kind, status: questions.status, position: questions.position })
       .from(questions)
       .where(and(eq(questions.id, toSlideId), eq(questions.pollId, poll.id)))
       .limit(1);
@@ -53,10 +53,22 @@ export async function navigateSlide(moderatorToken: string, fromSlideId: number 
 
     // Nejvýš jedna otevřená otázka — při odchodu se uzavře (i kdyby byla
     // otevřená jinde, např. ručním spuštěním v řídicí konzoli).
-    await tx
+    const closed = await tx
       .update(questions)
       .set({ status: "ended" })
-      .where(and(eq(questions.pollId, poll.id), eq(questions.status, "active")));
+      .where(and(eq(questions.pollId, poll.id), eq(questions.status, "active")))
+      .returning({ id: questions.id, position: questions.position });
+
+    // „Zpět“ z otevřené otázky, na kterou ještě nikdo neodpověděl: otázka
+    // se vrátí do stavu „připraveno“ (jako by nebyla položena), aby se při
+    // návratu vpřed normálně otevřela a neprozradila správnou odpověď.
+    // Bezpečné vůči souběhu: otázka je už uzavřená (zámek řádku), žádný
+    // další hlas se do ní nezapíše (cast-vote.ts drží FOR SHARE).
+    const leaving = closed.find((question) => question.id === fromSlideId);
+    if (leaving && target.position < leaving.position) {
+      const [voted] = await tx.select({ id: votes.id }).from(votes).where(eq(votes.questionId, leaving.id)).limit(1);
+      if (!voted) await tx.update(questions).set({ status: "prepared", answerDeadline: null }).where(eq(questions.id, leaving.id));
+    }
 
     if (target.kind === "question" && target.status === "prepared") {
       // Odpočet běží od otevření (hodiny databáze, viz cast-vote.ts).
