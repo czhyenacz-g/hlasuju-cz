@@ -992,15 +992,11 @@ function QuestionCard({
                 {question.options.map((option, optionIndex) => (
                   <div key={option.key} className="flex items-center gap-2">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-light text-sm font-bold text-brand-dark">{LETTERS[optionIndex]}</span>
-                    <input
-                      type="text"
+                    <OptionTextField
                       value={option.text}
-                      onChange={(e) =>
-                        onUpdateOptions((options) => options.map((o) => (o.key === option.key ? { ...o, text: e.target.value } : o)))
+                      onChange={(text) =>
+                        onUpdateOptions((options) => options.map((o) => (o.key === option.key ? { ...o, text } : o)))
                       }
-                      maxLength={LIMITS.MAX_OPTION_LENGTH}
-                      placeholder="Text odpovědi"
-                      className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
                     />
                     <label
                       className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-gray-600 hover:bg-pastel-green has-[:checked]:bg-pastel-green has-[:checked]:font-semibold has-[:checked]:text-emerald-800"
@@ -1061,6 +1057,41 @@ function QuestionCard({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * Text odpovědi: jednořádková hodnota, ale dlouhý text se v poli zalomí
+ * a pole se zvětší na výšku, aby byl vidět celý (input by ho odsunul
+ * mimo pole). Enter ani vložené konce řádků do textu nepustí.
+ */
+function OptionTextField({ value, onChange }: { value: string; onChange: (text: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const fit = () => {
+      const element = ref.current;
+      if (!element) return;
+      element.style.height = "auto";
+      element.style.height = `${element.scrollHeight}px`;
+    };
+    fit();
+    // Užší okno = víc řádků.
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(e.target.value.replace(/[\r\n]+/g, " "))}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.preventDefault();
+      }}
+      maxLength={LIMITS.MAX_OPTION_LENGTH}
+      placeholder="Text odpovědi"
+      className="block w-full resize-none overflow-hidden break-words rounded-xl border-2 border-gray-200 px-4 py-2.5 text-gray-900 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
+    />
   );
 }
 
