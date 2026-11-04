@@ -368,6 +368,9 @@ export default function ModeratorConsole({ moderatorToken }: { moderatorToken: s
         <p className="text-sm font-medium text-gray-500">Kód pro účastníky</p>
         <p className="mx-auto mt-2 inline-block rounded-2xl bg-brand-light px-6 py-2 text-5xl font-bold tracking-widest text-brand-dark">{poll.publicCode}</p>
         <p className="mt-2 text-gray-500">hlasuju.cz/{poll.publicCode}</p>
+        {poll.registeredParticipants !== null && (
+          <p className="mt-2 font-semibold text-gray-700">👥 Přihlášeno: {poll.registeredParticipants}</p>
+        )}
 
         <div className="mt-5 flex flex-wrap justify-center gap-3">
           <button

@@ -166,6 +166,8 @@ export type ModeratorPollView = {
   questions: ModeratorQuestionView[];
   totalVotes: number;
   uniqueParticipants: number;
+  /** Jmenovité hlasování: kolik lidí zadalo jméno (null = anonymní hlasování). Jen počet, nikdy seznam. */
+  registeredParticipants: number | null;
   /** Odeslání výsledků e-mailem (jen po ukončení, jen na adresu z vytvoření). */
   resultsEmail: { to: string | null; configured: boolean; lastSentAt: string | null; remaining: number };
 };

@@ -114,6 +114,15 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
     .innerJoin(questions, eq(votes.questionId, questions.id))
     .where(eq(questions.pollId, poll.id));
 
+  const registeredParticipants = poll.requireParticipantName
+    ? (
+        await db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(participants)
+          .where(eq(participants.pollId, poll.id))
+      )[0].count
+    : null;
+
   return {
     title: poll.title,
     publicCode: poll.publicCode,
@@ -125,6 +134,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
     questions: questionViews,
     totalVotes: questionViews.reduce((sum, q) => sum + q.totalVotes, 0),
     uniqueParticipants,
+    registeredParticipants,
     // Jen maskovaná adresa — moderátorský odkaz se sdílí s kolegy a
     // celou adresu z něj nikdo nemá vyčíst.
     resultsEmail: {

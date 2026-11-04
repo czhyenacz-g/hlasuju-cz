@@ -144,6 +144,11 @@ export default function PresentationView({
         <p className="text-lg text-gray-600 lg:text-2xl">
           Hlasujte na <span className="font-bold text-gray-900">hlasuju.cz</span> · kód{" "}
           <span className="font-bold tracking-widest text-brand">{formatCode(poll.publicCode)}</span>
+          {poll.registeredParticipants !== null && (
+            <span className="ml-4 font-semibold text-gray-700" title="Počet lidí, kteří zadali jméno">
+              👥 {poll.registeredParticipants}
+            </span>
+          )}
         </p>
         <p className="flex items-center text-base font-semibold text-gray-500 lg:text-xl">
           {slideIndex + 1} / {poll.questions.length}

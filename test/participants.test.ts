@@ -243,3 +243,20 @@ describe("souhrnné statistiky", () => {
   });
 });
 
+
+describe("počet přihlášených (moderátor)", () => {
+  test("jmenovité hlasování: počet zadaných jmen; anonymní: null; veřejné API počet neposílá", async () => {
+    const named = await createPoll({ title: "Jména", requireParticipantName: true, questions: [{ text: "Q", options: [{ text: "A" }, { text: "B" }] }] });
+    const token = named.body.moderatorToken as string;
+    const code = named.body.publicCode as string;
+    assert.equal((await getModerator(token)).body.registeredParticipants, 0);
+    for (const [id, name] of [["c1", "Anna"], ["c2", "Bert"], ["c1", "Anna"]]) {
+      await participantRoute.POST(jsonRequest("/x", "POST", { participantId: id, name }), routeParams({ publicCode: code }));
+    }
+    assert.equal((await getModerator(token)).body.registeredParticipants, 2);
+    assert.ok(!("registeredParticipants" in (await getPublic(code)).body));
+
+    const anon = await createPoll({ title: "Anonym", questions: [{ text: "Q", options: [{ text: "A" }, { text: "B" }] }] });
+    assert.equal((await getModerator(anon.body.moderatorToken)).body.registeredParticipants, null);
+  });
+});
