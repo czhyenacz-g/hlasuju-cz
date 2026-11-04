@@ -392,6 +392,7 @@ function QuestionSlide({ slide, showResults }: { slide: ModeratorQuestionView; s
 function ContentSlide({ slide }: { slide: ModeratorQuestionView }) {
   const title = slide.text.trim();
   const body = slide.body?.trim() ?? "";
+  const center = slide.textCenter;
 
   if (slide.images.length > 0 && !body) {
     return (
@@ -405,9 +406,9 @@ function ContentSlide({ slide }: { slide: ModeratorQuestionView }) {
   if (slide.images.length > 0) {
     return (
       <div className="flex flex-1 flex-col justify-center gap-6">
-        {title && <h1 className="text-4xl font-bold leading-tight lg:text-5xl xl:text-6xl">{title}</h1>}
+        {title && <h1 className={`text-4xl font-bold leading-tight lg:text-5xl xl:text-6xl ${center ? "text-center" : ""}`}>{title}</h1>}
         <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <SlideBody text={body} className="text-2xl leading-snug text-gray-800 lg:text-3xl xl:text-4xl" />
+          <SlideBody text={body} center={center} className="text-2xl leading-snug text-gray-800 lg:text-3xl xl:text-4xl" />
           <QuestionImages images={slide.images} fitHeight="min(66vh, 100vh - 18rem)" priority />
         </div>
       </div>
@@ -424,8 +425,8 @@ function ContentSlide({ slide }: { slide: ModeratorQuestionView }) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center gap-6 lg:gap-8">
-      {title && <h1 className="text-4xl font-bold leading-tight lg:text-6xl">{title}</h1>}
-      <SlideBody text={body} className="text-2xl leading-snug text-gray-800 lg:text-4xl" />
+      {title && <h1 className={`text-4xl font-bold leading-tight lg:text-6xl ${center ? "text-center" : ""}`}>{title}</h1>}
+      <SlideBody text={body} center={center} className="text-2xl leading-snug text-gray-800 lg:text-4xl" />
     </div>
   );
 }

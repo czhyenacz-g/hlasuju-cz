@@ -31,6 +31,8 @@ export type CreatePollQuestionInput = {
   speedBonus?: boolean;
   /** Odpočet na odpověď v sekundách, null = bez limitu. */
   timeLimitSeconds?: number | null;
+  /** Obsahový slajd: text na střed (výchozí false = vlevo). */
+  textCenter?: boolean;
 };
 export type CreatePollInput = {
   title?: string;
@@ -61,6 +63,7 @@ export type UpdatePollQuestionInput = {
   points?: number;
   speedBonus?: boolean;
   timeLimitSeconds?: number | null;
+  textCenter?: boolean;
 };
 /** Obrázek na pozadí promítání (bez popisu — je dekorativní). */
 export type BackgroundImage = { url: string; width: number; height: number };
@@ -138,6 +141,7 @@ export type ModeratorQuestionView = {
   points: number;
   speedBonus: boolean;
   timeLimitSeconds: number | null;
+  textCenter: boolean;
   /** Odpočet běžící otázky: zbývající ms podle času serveru (null = bez odpočtu / neběží). */
   remainingMs: number | null;
   /** Jen u uzavřené otázky s bonusem za rychlost: nejrychlejší správné odpovědi. */
@@ -182,6 +186,7 @@ export type EditorQuestion = {
   points: number;
   speedBonus: boolean;
   timeLimitSeconds: number | null;
+  textCenter: boolean;
   status: QuestionStatus;
   locked: boolean;
   voteCount: number;

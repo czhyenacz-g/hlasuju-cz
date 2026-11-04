@@ -689,3 +689,39 @@ describe("prezentace — Zpět z otevřené otázky", () => {
     assert.ok(r1);
   });
 });
+
+describe("obsahový slajd — zarovnání textu", () => {
+  test("výchozí vlevo; na střed se uloží, načte, zkopíruje; u otázky se ignoruje", async () => {
+    const { response, body } = await createPoll({
+      title: "Zarovnání",
+      questions: [
+        { kind: "content", text: "Vlevo", body: "Text" },
+        { kind: "content", text: "Střed", body: "Text", textCenter: true },
+        { text: "Otázka", options: [{ text: "A" }, { text: "B" }], textCenter: true },
+      ],
+    });
+    assert.equal(response.status, 201);
+    const content = (await getContent(body.moderatorToken)).body;
+    assert.deepEqual(content.questions.map((q: { textCenter: boolean }) => q.textCenter), [false, true, false]);
+    const mod = (await getModerator(body.moderatorToken)).body;
+    assert.deepEqual(mod.questions.map((q: { textCenter: boolean }) => q.textCenter), [false, true, false]);
+
+    // Změna v editoru (PUT /content).
+    const payload = {
+      version: content.version,
+      title: content.title,
+      questions: content.questions.map((q: { id: number; kind: string; text: string; body: string | null; options: unknown[] }, i: number) =>
+        q.kind === "content" ? { id: q.id, kind: q.kind, text: q.text, body: q.body, textCenter: i === 0 } : { id: q.id, text: q.text, options: q.options }
+      ),
+    };
+    const saved = await putContent(body.moderatorToken, payload);
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.body));
+    const after = (await getContent(body.moderatorToken)).body;
+    assert.deepEqual(after.questions.map((q: { textCenter: boolean }) => q.textCenter), [true, false, false]);
+
+    const dup = await duplicateRoute.POST(jsonRequest("/x", "POST"), routeParams({ moderatorToken: body.moderatorToken }));
+    const dupBody = await dup.json();
+    const copy = (await getContent(dupBody.moderatorToken)).body;
+    assert.deepEqual(copy.questions.map((q: { textCenter: boolean }) => q.textCenter), [true, false, false]);
+  });
+});

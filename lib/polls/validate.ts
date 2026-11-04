@@ -261,6 +261,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
         points: 1,
         speedBonus: false,
         timeLimitSeconds: null,
+        textCenter: kind === "content" && q.textCenter === true,
       });
       continue;
     }
@@ -359,6 +360,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       points,
       speedBonus,
       timeLimitSeconds,
+      textCenter: false,
     });
   }
 
@@ -434,6 +436,7 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
         points: q.points,
         speedBonus: q.speedBonus,
         timeLimitSeconds: q.timeLimitSeconds,
+        textCenter: q.textCenter,
       })),
     },
   };

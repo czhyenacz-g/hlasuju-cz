@@ -53,6 +53,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       points: questions.points,
       speedBonus: questions.speedBonus,
       timeLimitSeconds: questions.timeLimitSeconds,
+      textCenter: questions.textCenter,
       remainingMs: remainingMsColumn,
       ...questionMediaColumns,
     })
@@ -95,6 +96,7 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       points: q.points,
       speedBonus: q.speedBonus,
       timeLimitSeconds: q.timeLimitSeconds,
+      textCenter: q.textCenter,
       remainingMs: q.status === "active" ? toRemainingMs(q.remainingMs) : null,
       leaderboard: q.kind === "leaderboard" ? leaderboardFor(q.position) : null,
       fastest: q.speedBonus && q.status === "ended" && q.correctOptionId !== null ? fastestFor(q.id, q.correctOptionId) : null,

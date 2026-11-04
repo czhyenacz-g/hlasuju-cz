@@ -38,6 +38,8 @@ type QuestionDraft = {
   speedBonus: boolean;
   // Odpočet na odpověď v sekundách jako text pole ("" = bez odpočtu).
   timeLimit: string;
+  // Obsahový slajd: text na střed.
+  textCenter: boolean;
   // Zamčená otázka (spuštěná / s hlasy) — v UI jen pro čtení, při
   // uložení se posílá přesně původní obsah (`original`).
   locked: boolean;
@@ -83,6 +85,7 @@ function emptyQuestion(expanded = true, kind: SlideKind = "question"): QuestionD
     points: 1,
     speedBonus: false,
     timeLimit: "",
+    textCenter: false,
     locked: false,
     text: "",
     expanded,
@@ -115,6 +118,7 @@ function draftFromQuestion(question: EditorQuestion): QuestionDraft {
     points: question.points,
     speedBonus: question.speedBonus,
     timeLimit: question.timeLimitSeconds === null ? "" : String(question.timeLimitSeconds),
+    textCenter: question.textCenter,
     locked: question.locked,
     original: question,
     text: question.text,
@@ -202,6 +206,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
       points,
       speedBonus,
       timeLimitSeconds,
+      textCenter: false,
       body: null,
       resultsQuestionIndex: null,
     };
@@ -228,6 +233,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
       points: 1,
       speedBonus: false,
       timeLimitSeconds: null,
+      textCenter: question.kind === "content" && question.textCenter,
     };
   }
 
@@ -247,6 +253,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
     points: question.points,
     speedBonus: correctIndex !== -1 && question.speedBonus,
     timeLimitSeconds: parseTimeLimit(question.timeLimit),
+    textCenter: false,
   };
 }
 
@@ -361,6 +368,7 @@ export default function PollEditor(props: PollEditorProps) {
         points: source.points,
         speedBonus: source.speedBonus,
         timeLimit: source.timeLimit,
+        textCenter: source.textCenter,
         options: copiedOptions,
         correctKey: copiedOptions[source.options.findIndex((o) => o.key === source.correctKey)]?.key ?? null,
         // Uložené obrázky může sdílet i kopie; nenahrané se musí nahrát znovu.
@@ -566,6 +574,7 @@ export default function PollEditor(props: PollEditorProps) {
             points: payload.points,
             speedBonus: payload.speedBonus,
             timeLimitSeconds: payload.timeLimitSeconds,
+            textCenter: payload.textCenter,
           };
         }),
       }),
@@ -1411,6 +1420,22 @@ function ContentFields({
         />
         <span className="text-xs text-gray-500">
           Prázdný řádek = nový odstavec. Řádky začínající „- “ se zobrazí jako odrážky. {question.body.trim().length}/{LIMITS.MAX_SLIDE_BODY_LENGTH} znaků.
+        </span>
+        <span className="mt-1 flex items-center gap-2 text-sm text-gray-700">
+          Zarovnání:
+          {([false, true] as const).map((center) => (
+            <button
+              key={String(center)}
+              type="button"
+              aria-pressed={question.textCenter === center}
+              onClick={() => onChange({ textCenter: center })}
+              className={`rounded-lg border-2 px-3 py-1 font-semibold ${
+                question.textCenter === center ? "border-brand bg-brand-light text-brand-dark" : "border-gray-200 text-gray-600 hover:border-brand/40"
+              }`}
+            >
+              {center ? "Na střed" : "Vlevo"}
+            </button>
+          ))}
         </span>
         {longBody && (
           <span className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">

@@ -70,6 +70,7 @@ function questionColumns(input: UpdatePollQuestionInput, position: number) {
     points: input.points ?? 1,
     speedBonus: input.speedBonus ?? false,
     timeLimitSeconds: input.timeLimitSeconds ?? null,
+    textCenter: input.textCenter ?? false,
     position,
     ...questionImageColumns(input.images),
     linkUrl: input.link?.url ?? null,

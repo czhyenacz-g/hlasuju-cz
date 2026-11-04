@@ -1,0 +1,1 @@
+ALTER TABLE "questions" ADD COLUMN "text_center" boolean DEFAULT false NOT NULL;

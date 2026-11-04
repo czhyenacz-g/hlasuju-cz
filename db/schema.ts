@@ -112,6 +112,8 @@ export const questions = pgTable(
     // otázky se nastaví answer_deadline = now() + limit (čas databáze);
     // po něm cast-vote.ts hlasy odmítá. Znovuotevření = nový odpočet.
     timeLimitSeconds: integer("time_limit_seconds"),
+    // Obsahový slajd: nadpis a text na střed (výchozí vlevo).
+    textCenter: boolean("text_center").notNull().default(false),
     answerDeadline: timestamp("answer_deadline", { withTimezone: true }),
   },
   (table) => [index("questions_poll_id_idx").on(table.pollId)]

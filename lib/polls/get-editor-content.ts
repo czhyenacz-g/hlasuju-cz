@@ -30,6 +30,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
       points: questions.points,
       speedBonus: questions.speedBonus,
       timeLimitSeconds: questions.timeLimitSeconds,
+      textCenter: questions.textCenter,
       ...questionMediaColumns,
     })
     .from(questions)
@@ -77,6 +78,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
         points: row.points,
         speedBonus: row.speedBonus,
         timeLimitSeconds: row.timeLimitSeconds,
+        textCenter: row.textCenter,
         status: row.status as QuestionStatus,
         locked: isQuestionLocked({ status: row.status, voteCount }, poll.mode),
         voteCount,
