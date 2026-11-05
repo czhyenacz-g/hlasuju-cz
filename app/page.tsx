@@ -97,6 +97,9 @@ export default function Home() {
         <Link href="/srovnani" className="inline-flex min-h-[44px] items-center px-3 underline-offset-4 hover:text-gray-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20">
           Srovnání nástrojů
         </Link>
+        <Link href="/reference" className="inline-flex min-h-[44px] items-center px-3 underline-offset-4 hover:text-gray-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20">
+          Reference
+        </Link>
       </footer>
     </main>
   );

@@ -116,6 +116,13 @@ export default function MentimeterAlternativePage() {
         <p className="mt-4">
           Když chce školení zopakovat s další skupinou, spustí nové promítání se stejnými otázkami a čistými výsledky.
         </p>
+        <p className="mt-4">
+          Skutečné použití na odborné přednášce popisuje případová studie{" "}
+          <Link href="/reference/parako-2026" className="font-semibold text-brand-dark underline-offset-4 hover:underline">
+            kvíz s rentgenovými snímky na PaRaKo 2026
+          </Link>
+          .
+        </p>
       </Section>
 
       <Section title="Kdy zvolit Hlasuju.cz">

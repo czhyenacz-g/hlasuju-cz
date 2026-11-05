@@ -12,7 +12,7 @@ import { SITE_NAME, SITE_URL } from "../../app/config/site.ts";
  * v app/sitemap.ts.
  */
 export const COMPARISON_VERIFIED_AT = "2. 11. 2026";
-export const COMPARISON_LAST_MODIFIED = new Date("2026-11-03");
+export const COMPARISON_LAST_MODIFIED = new Date("2026-11-05");
 
 export function comparisonMetadata(path: string, title: string, description: string): Metadata {
   const url = `${SITE_URL}${path}`;
@@ -67,6 +67,10 @@ export function ComparisonShell({ crumb, children }: { crumb?: string; children:
           ·{" "}
           <Link href="/srovnani" className={linkClass}>
             Srovnání nástrojů
+          </Link>{" "}
+          ·{" "}
+          <Link href="/reference" className={linkClass}>
+            Reference
           </Link>{" "}
           ·{" "}
           <Link href="/pro-weby" className={linkClass}>
