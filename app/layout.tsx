@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import SiteAnalytics from "../components/SiteAnalytics.tsx";
 import { GOATCOUNTER_CODE } from "./config/analytics.ts";
@@ -28,6 +28,12 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  // Instalace na iPhonu (Přidat na plochu) — název a samostatné okno.
+  appleWebApp: { capable: true, title: "Hlasuju.cz", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#FAF9F6",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

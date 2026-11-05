@@ -3,6 +3,7 @@ import AlphegaAffiliateBanner from "../components/AlphegaAffiliateBanner.tsx";
 import VotingBackdrop from "../components/VotingBackdrop.tsx";
 import Logo from "../components/Logo.tsx";
 import HomeJoinForm from "./HomeJoinForm.tsx";
+import InstallAppButton from "../components/InstallAppButton.tsx";
 
 const BENEFITS = [
   { title: "Bez registrace", icon: "M5 12.5l4 4 10-10" },
@@ -100,6 +101,7 @@ export default function Home() {
         <Link href="/reference" className="inline-flex min-h-[44px] items-center px-3 underline-offset-4 hover:text-gray-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20">
           Reference
         </Link>
+        <InstallAppButton />
       </footer>
     </main>
   );

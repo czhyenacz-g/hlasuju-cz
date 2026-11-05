@@ -174,6 +174,11 @@ vypršelých před > 7 dny a staré řádky `rate_limits`. Vyžaduje
 `CRON_SECRET` (libovolný dlouhý náhodný řetězec v env proměnných);
 bez něj endpoint nic neudělá.
 
+## Instalace jako aplikace a monitoring
+
+- **PWA:** `app/manifest.ts`, ikony (`app/icon.tsx`, `app/apple-icon.tsx`, `app/icons/[name]`), nabídka „Nainstalovat aplikaci“ v patičce úvodní stránky (`components/InstallAppButton.tsx`). Záměrně bez service workeru — nic se necachuje a hlasování vyžaduje internet.
+- **Monitoring:** chráněný provozní endpoint a externí kontroly — viz [docs/monitoring.md](docs/monitoring.md).
+
 ## Testy
 
 `npm test` — unit + integrační testy nad in-memory Postgresem (PGlite,
