@@ -49,11 +49,11 @@ export async function activateQuestion(moderatorToken: string, questionId: numbe
 
     await tx
       .update(questions)
-      .set({ status: "ended" })
+      .set({ status: "ended", timerStoppedAt: sql`now()` })
       .where(and(eq(questions.pollId, poll.id), eq(questions.status, "active")));
 
-    // Spuštění i znovuotevření = nový odpočet od teď (hodiny databáze).
-    await tx.update(questions).set({ status: "active", answerDeadline: sql`case when ${questions.timeLimitSeconds} is null then null else now() + make_interval(secs => ${questions.timeLimitSeconds}) end` }).where(eq(questions.id, questionId));
+    // Spuštění i znovuotevření = počítadlo času znovu od nuly.
+    await tx.update(questions).set({ status: "active", timerStartedAt: sql`now()`, timerStoppedAt: null }).where(eq(questions.id, questionId));
 
     await tx.update(polls).set({ activeQuestionId: questionId, expiresAt: extendedExpiresAt() }).where(eq(polls.id, poll.id));
 

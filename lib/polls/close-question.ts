@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { polls, questions } from "../../db/schema.ts";
 
@@ -31,7 +31,7 @@ export async function closeQuestion(moderatorToken: string, questionId: number):
 
     await tx
       .update(questions)
-      .set({ status: "ended" })
+      .set({ status: "ended", timerStoppedAt: sql`now()` })
       .where(and(eq(questions.id, questionId), eq(questions.pollId, poll.id), eq(questions.status, "active")));
 
     return { ok: true };

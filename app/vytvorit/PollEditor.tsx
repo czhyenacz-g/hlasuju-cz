@@ -36,8 +36,8 @@ type QuestionDraft = {
   points: number;
   // Bonus +3/+2/+1 pro první tři správné odpovědi.
   speedBonus: boolean;
-  // Odpočet na odpověď v sekundách jako text pole ("" = bez odpočtu).
-  timeLimit: string;
+  // „Zobrazovat čas“ — počítadlo uplynulého času v promítání.
+  showTimer: boolean;
   // Obsahový slajd: text na střed.
   textCenter: boolean;
   // Zamčená otázka (spuštěná / s hlasy) — v UI jen pro čtení, při
@@ -84,7 +84,7 @@ function emptyQuestion(expanded = true, kind: SlideKind = "question"): QuestionD
     resultsKey: null,
     points: 1,
     speedBonus: false,
-    timeLimit: "",
+    showTimer: kind === "question",
     textCenter: false,
     locked: false,
     text: "",
@@ -117,7 +117,7 @@ function draftFromQuestion(question: EditorQuestion): QuestionDraft {
     resultsKey: question.resultsQuestionId ? `q${question.resultsQuestionId}` : null,
     points: question.points,
     speedBonus: question.speedBonus,
-    timeLimit: question.timeLimitSeconds === null ? "" : String(question.timeLimitSeconds),
+    showTimer: question.showTimer,
     textCenter: question.textCenter,
     locked: question.locked,
     original: question,
@@ -193,7 +193,7 @@ function resultsIndex(question: QuestionDraft, all: QuestionDraft[]): number | n
 /** Návrh otázky → vstup pro PUT /content (zamčené otázky beze změny). */
 function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url: string; width: number; height: number }>, all: QuestionDraft[]) {
   if (question.locked && question.original) {
-    const { id, kind, text, options, images, link, correctOptionId, points, speedBonus, timeLimitSeconds } = question.original;
+    const { id, kind, text, options, images, link, correctOptionId, points, speedBonus } = question.original;
     const correctIndex = options.findIndex((option) => option.id === correctOptionId);
     return {
       id,
@@ -205,7 +205,8 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
       correctOptionIndex: correctIndex === -1 ? null : correctIndex,
       points,
       speedBonus,
-      timeLimitSeconds,
+      // Jediné, co jde u spuštěné otázky změnit (jen vzhled promítání).
+      showTimer: question.showTimer,
       textCenter: false,
       body: null,
       resultsQuestionIndex: null,
@@ -232,7 +233,7 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
       resultsQuestionIndex: resultsIndex(question, all),
       points: 1,
       speedBonus: false,
-      timeLimitSeconds: null,
+      showTimer: question.showTimer,
       textCenter: question.kind === "content" && question.textCenter,
     };
   }
@@ -252,15 +253,9 @@ function toPayloadQuestion(question: QuestionDraft, uploaded: Map<string, { url:
     resultsQuestionIndex: null,
     points: question.points,
     speedBonus: correctIndex !== -1 && question.speedBonus,
-    timeLimitSeconds: parseTimeLimit(question.timeLimit),
+    showTimer: question.showTimer,
     textCenter: false,
   };
-}
-
-/** Text pole odpočtu → sekundy (prázdné / 0 = bez odpočtu). Rozsah hlídá i server. */
-function parseTimeLimit(value: string): number | null {
-  const seconds = Math.round(Number(value.trim().replace(",", ".")));
-  return value.trim() === "" || !Number.isFinite(seconds) || seconds <= 0 ? null : seconds;
 }
 
 // Jeden editor pro vytvoření i úpravu hlasování (žádná duplicitní logika).
@@ -367,7 +362,7 @@ export default function PollEditor(props: PollEditorProps) {
         resultsKey: source.resultsKey,
         points: source.points,
         speedBonus: source.speedBonus,
-        timeLimit: source.timeLimit,
+        showTimer: source.showTimer,
         textCenter: source.textCenter,
         options: copiedOptions,
         correctKey: copiedOptions[source.options.findIndex((o) => o.key === source.correctKey)]?.key ?? null,
@@ -573,7 +568,7 @@ export default function PollEditor(props: PollEditorProps) {
             resultsQuestionIndex: payload.resultsQuestionIndex,
             points: payload.points,
             speedBonus: payload.speedBonus,
-            timeLimitSeconds: payload.timeLimitSeconds,
+            showTimer: payload.showTimer,
             textCenter: payload.textCenter,
           };
         }),
@@ -1045,7 +1040,6 @@ function QuestionCard({
                 {!single && question.options.some((o) => o.key === question.correctKey) && (
                   <ScoringFields question={question} onChange={onChange} />
                 )}
-                {!single && <TimeLimitField question={question} onChange={onChange} />}
               </div>
 
               <LinkField question={question} onChange={onChange} />
@@ -1053,6 +1047,17 @@ function QuestionCard({
           )}
           {!single && question.kind === "question" && onAddResults && (
             <ResultsShortcut question={question} all={all} onAdd={onAddResults} />
+          )}
+          {!single && (
+            <label className="flex items-center gap-2 self-start text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={question.showTimer}
+                onChange={(e) => onChange({ showTimer: e.target.checked })}
+                className="h-4 w-4 accent-brand"
+              />
+              Zobrazovat čas
+            </label>
           )}
         </div>
       )}
@@ -1396,7 +1401,6 @@ function slideSummary(question: QuestionDraft, all: QuestionDraft[]): { title: s
           question.images.length > 1 ? `${question.images.length} obrázky` : question.images.length === 1 ? "obrázek" : "",
           question.linkUrl.trim() ? "odkaz" : "",
           correct ? `bodovaná (${question.points} b.${question.speedBonus ? " + bonus za rychlost" : ""})` : "",
-          parseTimeLimit(question.timeLimit) !== null ? `odpočet ${parseTimeLimit(question.timeLimit)} s` : "",
         ]
           .filter(Boolean)
           .join(" · "),
@@ -1596,37 +1600,6 @@ function ResultsShortcut({ question, all, onAdd }: { question: QuestionDraft; al
     <button type="button" onClick={onAdd} className="self-start text-sm font-semibold text-brand hover:underline">
       + Výsledky za tuto otázku (slajd hned za ní)
     </button>
-  );
-}
-
-/** Odpočet na odpověď: po vypršení server další odpovědi nepřijme. */
-function TimeLimitField({ question, onChange }: { question: QuestionDraft; onChange: (patch: Partial<QuestionDraft>) => void }) {
-  const seconds = parseTimeLimit(question.timeLimit);
-  const outOfRange = seconds !== null && (seconds < LIMITS.MIN_TIME_LIMIT_SECONDS || seconds > LIMITS.MAX_TIME_LIMIT_SECONDS);
-  return (
-    <div className="ml-9 rounded-xl bg-pastel-blue/60 px-3 py-2 text-sm text-gray-800">
-      <label className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">Odpočet na odpověď</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={LIMITS.MIN_TIME_LIMIT_SECONDS}
-          max={LIMITS.MAX_TIME_LIMIT_SECONDS}
-          placeholder="bez limitu"
-          value={question.timeLimit}
-          onChange={(e) => onChange({ timeLimit: e.target.value })}
-          className="w-28 rounded-lg border-2 border-gray-200 bg-white px-2 py-1 text-gray-900 focus:border-brand focus:outline-none"
-        />
-        <span>sekund</span>
-      </label>
-      <p className={`mt-1 text-xs ${outOfRange ? "font-semibold text-red-600" : "text-gray-600"}`}>
-        {outOfRange
-          ? `Zadejte ${LIMITS.MIN_TIME_LIMIT_SECONDS}–${LIMITS.MAX_TIME_LIMIT_SECONDS} sekund, nebo pole nechte prázdné.`
-          : seconds === null
-            ? "Prázdné = bez limitu, otázku ukončíte sami."
-            : `Odpočet ${seconds} s začne spuštěním otázky. Pak už se odpovědi nepřijímají.`}
-      </p>
-    </div>
   );
 }
 

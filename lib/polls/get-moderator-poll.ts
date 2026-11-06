@@ -4,7 +4,7 @@ import { getDb } from "../../db/index.ts";
 import { options, participants, polls, questions, votes } from "../../db/schema.ts";
 import { computeLeaderboard } from "./leaderboard.ts";
 import { LIMITS } from "./limits.ts";
-import { questionMediaColumns, remainingMsColumn, toBackgroundImage, toQuestionImages, toQuestionLink, toRemainingMs } from "./question-media.ts";
+import { questionMediaColumns, timerColumns, toBackgroundImage, toQuestionImages, toQuestionLink, toTimer } from "./question-media.ts";
 import { isEmailConfigured } from "../email/send-email.ts";
 import { maskEmail, RESULTS_EMAIL_MAX_SENDS } from "./send-results-email.ts";
 import type { ModeratorPollView, ModeratorQuestionView } from "./types.ts";
@@ -52,9 +52,9 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       resultsQuestionId: questions.resultsQuestionId,
       points: questions.points,
       speedBonus: questions.speedBonus,
-      timeLimitSeconds: questions.timeLimitSeconds,
+      showTimer: questions.showTimer,
       textCenter: questions.textCenter,
-      remainingMs: remainingMsColumn,
+      ...timerColumns,
       ...questionMediaColumns,
     })
     .from(questions)
@@ -95,9 +95,10 @@ export async function getModeratorPoll(moderatorToken: string): Promise<Moderato
       resultsQuestionId: q.resultsQuestionId,
       points: q.points,
       speedBonus: q.speedBonus,
-      timeLimitSeconds: q.timeLimitSeconds,
+      showTimer: q.showTimer,
       textCenter: q.textCenter,
-      remainingMs: q.status === "active" ? toRemainingMs(q.remainingMs) : null,
+      // Jen právě promítaný slajd se zapnutým „Zobrazovat čas“.
+      timer: q.showTimer && poll.activeQuestionId === q.id ? toTimer(q) : null,
       leaderboard: q.kind === "leaderboard" ? leaderboardFor(q.position) : null,
       fastest: q.speedBonus && q.status === "ended" && q.correctOptionId !== null ? fastestFor(q.id, q.correctOptionId) : null,
       position: q.position,

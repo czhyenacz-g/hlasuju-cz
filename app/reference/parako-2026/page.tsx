@@ -125,7 +125,7 @@ export default function Parako2026Page() {
               "Ke každé otázce až tři obrázky vedle sebe. Na plátně i v mobilu jde obrázek zvětšit na celou obrazovku.",
               "Správná odpověď, body za ni a volitelný bonus pro nejrychlejší správné odpovědi.",
               "Slajd s výsledky za otázkou a slajd s průběžným pořadím účastníků.",
-              "Volitelný odpočet sekund na odpověď a obsahové slajdy s textem mezi otázkami.",
+              "Počítadlo času na plátně a obsahové slajdy s textem mezi otázkami.",
             ]}
           />
           <p className="mt-4">

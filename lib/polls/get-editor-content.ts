@@ -29,7 +29,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
       resultsQuestionId: questions.resultsQuestionId,
       points: questions.points,
       speedBonus: questions.speedBonus,
-      timeLimitSeconds: questions.timeLimitSeconds,
+      showTimer: questions.showTimer,
       textCenter: questions.textCenter,
       ...questionMediaColumns,
     })
@@ -77,7 +77,7 @@ export async function getEditorContent(moderatorToken: string): Promise<EditorCo
         resultsQuestionId: row.resultsQuestionId,
         points: row.points,
         speedBonus: row.speedBonus,
-        timeLimitSeconds: row.timeLimitSeconds,
+        showTimer: row.showTimer,
         textCenter: row.textCenter,
         status: row.status as QuestionStatus,
         locked: isQuestionLocked({ status: row.status, voteCount }, poll.mode),

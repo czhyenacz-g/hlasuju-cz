@@ -108,13 +108,20 @@ export const questions = pgTable(
     // Bonus za rychlost: první tři správné odpovědi (podle času zápisu na
     // serveru) dostanou navíc +3/+2/+1 (lib/polls/leaderboard.ts).
     speedBonus: boolean("speed_bonus").notNull().default(false),
-    // Odpočet na odpověď v sekundách (NULL = bez limitu). Při otevření
-    // otázky se nastaví answer_deadline = now() + limit (čas databáze);
-    // po něm cast-vote.ts hlasy odmítá. Znovuotevření = nový odpočet.
+    // Dřívější odpočet na odpověď — už se nepoužívá (nahradilo ho
+    // počítadlo uplynulého času show_timer). Sloupce time_limit_seconds
+    // a answer_deadline zůstávají kvůli bezpečné migraci (žádné mazání dat).
     timeLimitSeconds: integer("time_limit_seconds"),
     // Obsahový slajd: nadpis a text na střed (výchozí vlevo).
     textCenter: boolean("text_center").notNull().default(false),
     answerDeadline: timestamp("answer_deadline", { withTimezone: true }),
+    // „Zobrazovat čas“: v promítání počítadlo 00:00 od zobrazení slajdu.
+    // Nic nezamyká. Výchozí: otázka zapnuto, ostatní slajdy vypnuto.
+    showTimer: boolean("show_timer").notNull().default(false),
+    // Počítadlo podle hodin databáze: start = slajd se zobrazil (navigace /
+    // spuštění otázky), stop = otázka se uzavřela. NULL start = nepočítá se.
+    timerStartedAt: timestamp("timer_started_at", { withTimezone: true }),
+    timerStoppedAt: timestamp("timer_stopped_at", { withTimezone: true }),
   },
   (table) => [index("questions_poll_id_idx").on(table.pollId)]
 );

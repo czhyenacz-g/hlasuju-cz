@@ -29,8 +29,8 @@ export type CreatePollQuestionInput = {
   points?: number;
   /** Bonus +3/+2/+1 pro první tři správné odpovědi (výchozí false). */
   speedBonus?: boolean;
-  /** Odpočet na odpověď v sekundách, null = bez limitu. */
-  timeLimitSeconds?: number | null;
+  /** „Zobrazovat čas“ v promítání (výchozí: otázka true, jinak false). */
+  showTimer?: boolean;
   /** Obsahový slajd: text na střed (výchozí false = vlevo). */
   textCenter?: boolean;
 };
@@ -62,7 +62,7 @@ export type UpdatePollQuestionInput = {
   resultsQuestionIndex?: number | null;
   points?: number;
   speedBonus?: boolean;
-  timeLimitSeconds?: number | null;
+  showTimer?: boolean;
   textCenter?: boolean;
 };
 /** Obrázek na pozadí promítání (bez popisu — je dekorativní). */
@@ -99,9 +99,6 @@ export type PublicPollView = {
     /** Jen pokud ho moderátor povolil ukázat už během hlasování. */
     link: PublicQuestionLink | null;
     options: { id: number; text: string }[];
-    /** Odpočet: kolik ms zbývá podle času serveru (null = bez limitu). 0 = čas vypršel. */
-    remainingMs: number | null;
-    timeLimitSeconds: number | null;
   } | null;
   closedQuestion: {
     id: number;
@@ -140,10 +137,10 @@ export type ModeratorQuestionView = {
   resultsQuestionId: number | null;
   points: number;
   speedBonus: boolean;
-  timeLimitSeconds: number | null;
+  showTimer: boolean;
   textCenter: boolean;
-  /** Odpočet běžící otázky: zbývající ms podle času serveru (null = bez odpočtu / neběží). */
-  remainingMs: number | null;
+  /** Počítadlo času slajdu: uplynulé ms podle hodin serveru (null = nepočítá se), `running` = ještě běží. */
+  timer: { elapsedMs: number; running: boolean } | null;
   /** Jen u uzavřené otázky s bonusem za rychlost: nejrychlejší správné odpovědi. */
   fastest: { label: string; bonus: number }[] | null;
   /** Jen u slajdu žebříčku. */
@@ -185,7 +182,7 @@ export type EditorQuestion = {
   resultsQuestionId: number | null;
   points: number;
   speedBonus: boolean;
-  timeLimitSeconds: number | null;
+  showTimer: boolean;
   textCenter: boolean;
   status: QuestionStatus;
   locked: boolean;

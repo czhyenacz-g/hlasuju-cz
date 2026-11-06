@@ -1,7 +1,6 @@
 "use client";
 
 import type { ModeratorQuestionView } from "../../../lib/polls/types.ts";
-import { useCountdown } from "../../../lib/polls/use-countdown.ts";
 
 export type ModeratorAction = "activate" | "close" | "end";
 
@@ -72,10 +71,8 @@ export function QuestionStatusBadge({
   compact?: boolean;
 }) {
   const base = "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold";
-  const secondsLeft = useCountdown(question.status === "active" ? question.id : null, question.remainingMs);
   if (question.status === "active") {
-    const timer = secondsLeft === null ? "" : secondsLeft > 0 ? ` · ${secondsLeft} s` : " · čas vypršel";
-    return <span className={`${base} bg-green-100 text-green-800`}>● Hlasuje se{timer}{compact ? "" : ` · ${question.totalVotes} hlasů`}</span>;
+    return <span className={`${base} bg-green-100 text-green-800`}>● Hlasuje se{compact ? "" : ` · ${question.totalVotes} hlasů`}</span>;
   }
   if (question.status === "ended") {
     return (

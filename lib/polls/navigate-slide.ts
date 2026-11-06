@@ -55,7 +55,7 @@ export async function navigateSlide(moderatorToken: string, fromSlideId: number 
     // otevřená jinde, např. ručním spuštěním v řídicí konzoli).
     const closed = await tx
       .update(questions)
-      .set({ status: "ended" })
+      .set({ status: "ended", timerStoppedAt: sql`now()` })
       .where(and(eq(questions.pollId, poll.id), eq(questions.status, "active")))
       .returning({ id: questions.id, position: questions.position });
 
@@ -67,13 +67,17 @@ export async function navigateSlide(moderatorToken: string, fromSlideId: number 
     const leaving = closed.find((question) => question.id === fromSlideId);
     if (leaving && target.position < leaving.position) {
       const [voted] = await tx.select({ id: votes.id }).from(votes).where(eq(votes.questionId, leaving.id)).limit(1);
-      if (!voted) await tx.update(questions).set({ status: "prepared", answerDeadline: null }).where(eq(questions.id, leaving.id));
+      if (!voted) await tx.update(questions).set({ status: "prepared", timerStartedAt: null, timerStoppedAt: null }).where(eq(questions.id, leaving.id));
     }
 
-    if (target.kind === "question" && target.status === "prepared") {
-      // Odpočet běží od otevření (hodiny databáze, viz cast-vote.ts).
-      await tx.update(questions).set({ status: "active", answerDeadline: sql`case when ${questions.timeLimitSeconds} is null then null else now() + make_interval(secs => ${questions.timeLimitSeconds}) end` }).where(eq(questions.id, target.id));
-    }
+    // Počítadlo času: každé zobrazení slajdu počítá znovu od nuly. Už
+    // uzavřená otázka se nepočítá (je zamčená, čas by neměl smysl).
+    const opens = target.kind === "question" && target.status === "prepared";
+    const counts = opens || target.kind !== "question";
+    await tx
+      .update(questions)
+      .set({ ...(opens ? { status: "active" } : {}), timerStartedAt: counts ? sql`now()` : null, timerStoppedAt: null })
+      .where(eq(questions.id, target.id));
 
     await tx.update(polls).set({ activeQuestionId: target.id, expiresAt: extendedExpiresAt() }).where(eq(polls.id, poll.id));
     return { ok: true, activeSlideId: target.id, changed: true };

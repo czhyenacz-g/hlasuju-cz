@@ -260,7 +260,8 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
         resultsQuestionIndex,
         points: 1,
         speedBonus: false,
-        timeLimitSeconds: null,
+        // Obsah, výsledky, žebříček: čas ve výchozím stavu nezobrazovat.
+        showTimer: q.showTimer === true,
         textCenter: kind === "content" && q.textCenter === true,
       });
       continue;
@@ -337,15 +338,9 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
     }
     const speedBonus = q.speedBonus === true && correctOptionIndex !== null;
 
-    // Odpočet na odpověď (sekundy), null = bez limitu.
-    let timeLimitSeconds: number | null = null;
-    if (q.timeLimitSeconds !== undefined && q.timeLimitSeconds !== null) {
-      const value = q.timeLimitSeconds;
-      if (!Number.isInteger(value) || (value as number) < LIMITS.MIN_TIME_LIMIT_SECONDS || (value as number) > LIMITS.MAX_TIME_LIMIT_SECONDS) {
-        return { ok: false, error: `${prefix}: odpočet musí být celé číslo ${LIMITS.MIN_TIME_LIMIT_SECONDS}–${LIMITS.MAX_TIME_LIMIT_SECONDS} sekund.` };
-      }
-      timeLimitSeconds = value as number;
-    }
+    // „Zobrazovat čas“ — u otázky ve výchozím stavu zapnuto. Dřívější
+    // odpočet (timeLimitSeconds ze staršího editoru) se ignoruje.
+    const showTimer = q.showTimer !== false;
 
     questions.push({
       ...(id === undefined ? {} : { id }),
@@ -359,7 +354,7 @@ function validateQuestions(raw: unknown, mode: "create" | "update"): FieldResult
       resultsQuestionIndex: null,
       points,
       speedBonus,
-      timeLimitSeconds,
+      showTimer,
       textCenter: false,
     });
   }
@@ -435,7 +430,7 @@ export function validateCreatePollInput(input: unknown): ValidationResult {
         resultsQuestionIndex: q.resultsQuestionIndex,
         points: q.points,
         speedBonus: q.speedBonus,
-        timeLimitSeconds: q.timeLimitSeconds,
+        showTimer: q.showTimer,
         textCenter: q.textCenter,
       })),
     },

@@ -84,9 +84,8 @@ export default function KahootAlternativePage() {
       <Section title="Kvíz, kde čas jen pomáhá">
         <p>
           Kahoot! je postavený na rychlosti: otázka má odpočet a body klesají s každou vteřinou. Hlasuju.cz je klidnější. Body dostane
-          každý, kdo odpověděl správně, a otázku můžete ukončit, až když odpoví všichni. Kdo chce soutěživost, nastaví u otázky odpočet
-          (např. 10 sekund – pak už se odpovědi nepřijímají) nebo zapne bonus za rychlost: první tři správné odpovědi dostanou navíc 3, 2
-          a 1 bod.
+          každý, kdo odpověděl správně, a otázku můžete ukončit, až když odpoví všichni. Na plátně běží nenápadné počítadlo času od
+          otevření otázky. Kdo chce soutěživost, zapne bonus za rychlost: první tři správné odpovědi dostanou navíc 3, 2 a 1 bod.
         </p>
         <ComparisonTable competitor="Kahoot!" rows={ROWS} caption="Srovnání Hlasuju.cz a Kahoot!" />
       </Section>
@@ -115,7 +114,7 @@ export default function KahootAlternativePage() {
           items={[
             "Máte ve třídě nebo na akci víc hráčů, než dovoluje bezplatný tarif Kahootu.",
             "Nechcete zakládat účet a kvíz potřebujete jednorázově – na školení, večírek nebo táborový program.",
-            "Chcete kvíz, kde rozhoduje hlavně správnost – odpočet a bonus za rychlost zapnete jen u otázek, kde se hodí.",
+            "Chcete kvíz, kde rozhoduje hlavně správnost – bonus za rychlost zapnete jen u otázek, kde se hodí.",
             "Potřebujete mezi otázky vložit vysvětlující slajd s textem a obrázkem.",
           ]}
         />
@@ -144,7 +143,7 @@ export default function KahootAlternativePage() {
             },
             {
               q: "Je otázka omezená časem?",
-              a: "Jen když chcete. U otázky nastavíte odpočet v sekundách (3 s až 10 min). Odpočet běží na plátně i v telefonech a po jeho konci server další odpovědi nepřijme. Bez odpočtu otázku ukončíte sami tlačítkem nebo klávesou.",
+              a: "Ne. Na plátně se ukazuje, kolik času od otevření otázky uběhlo (u každého slajdu jde vypnout). Odpovídání ukončíte sami tlačítkem nebo klávesou, až uznáte za vhodné.",
             },
             {
               q: "Můžu kvíz zopakovat s jinou třídou?",

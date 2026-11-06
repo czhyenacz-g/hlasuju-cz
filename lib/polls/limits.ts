@@ -13,11 +13,6 @@ export const LIMITS = {
   MAX_POINTS: 100,
   /** Bonus za rychlost pro 1., 2. a 3. správnou odpověď. */
   SPEED_BONUS: [3, 2, 1] as readonly number[],
-  // Odpočet na odpověď (sekundy). Hlas, který dorazí do TIME_LIMIT_GRACE_MS
-  // po konci, se ještě přijme (zpoždění sítě u tlačítka stisknutého v čase).
-  MIN_TIME_LIMIT_SECONDS: 3,
-  MAX_TIME_LIMIT_SECONDS: 600,
-  TIME_LIMIT_GRACE_MS: 1000,
   // Žebříček na plátně: kolik míst na jednu stránku.
   LEADERBOARD_PAGE_SIZE: 10,
   MIN_OPTIONS: 2,

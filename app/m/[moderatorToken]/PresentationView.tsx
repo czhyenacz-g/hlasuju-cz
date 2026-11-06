@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import CountdownBadge from "../../../components/CountdownBadge.tsx";
 import QrCode from "../../../components/QrCode.tsx";
 import { QuestionImages } from "../../../components/QuestionImage.tsx";
 import QuestionLink from "../../../components/QuestionLink.tsx";
 import ResultsBarChart from "../../../components/ResultsBarChart.tsx";
 import SlideBody from "../../../components/SlideBody.tsx";
 import { LIMITS } from "../../../lib/polls/limits.ts";
-import { useCountdown } from "../../../lib/polls/use-countdown.ts";
+import { formatElapsed } from "../../../lib/polls/format-elapsed.ts";
+import { useElapsedSeconds } from "../../../lib/polls/use-elapsed.ts";
 import { confirmReopen, type ModeratorAction } from "./QuestionControls.tsx";
 import type { ModeratorPollView, ModeratorQuestionView } from "../../../lib/polls/types.ts";
 
@@ -75,7 +75,7 @@ export default function PresentationView({
 
   const isQuestion = slide.kind === "question";
   const showResults = resultsOverride?.slideId === slide.id ? resultsOverride.visible : slide.status === "ended";
-  const secondsLeft = useCountdown(slide.kind === "question" && slide.status === "active" ? slide.id : null, slide.remainingMs);
+  const elapsedSeconds = useElapsedSeconds(slide.id, slide.timer);
 
   const previous = poll.questions[slideIndex - 1];
   const next = poll.questions[slideIndex + 1];
@@ -152,11 +152,13 @@ export default function PresentationView({
         </p>
         <p className="flex items-center text-base font-semibold text-gray-500 lg:text-xl">
           {slideIndex + 1} / {poll.questions.length}
-          {isQuestion && slide.status === "active" && secondsLeft === null && <span className="ml-3 text-green-700">● odpovídá se</span>}
-          {isQuestion && slide.status === "active" && secondsLeft !== null && (
-            <CountdownBadge seconds={secondsLeft} className="ml-4 h-12 min-w-12 px-3 text-2xl lg:h-16 lg:min-w-16 lg:text-4xl" />
-          )}
+          {isQuestion && slide.status === "active" && <span className="ml-3 text-green-700">● odpovídá se</span>}
           {isQuestion && slide.status === "ended" && <span className="ml-3 text-gray-500">odpovídání ukončeno</span>}
+          {elapsedSeconds !== null && (
+            <span role="timer" aria-live="off" aria-label="Uplynulý čas" className="ml-4 tabular-nums text-gray-500">
+              {formatElapsed(elapsedSeconds)}
+            </span>
+          )}
         </p>
       </header>
 

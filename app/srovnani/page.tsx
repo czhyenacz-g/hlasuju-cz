@@ -21,7 +21,7 @@ const ITEMS = [
   {
     href: "/alternativa-kahoot",
     title: "Hlasuju.cz vs. Kahoot!",
-    text: "Pro kvízy ve třídě: body, bonus za rychlost, volitelný odpočet a pořadí. Kahoot! je víc hra, s body podle rychlosti a více typy otázek.",
+    text: "Pro kvízy ve třídě: body, bonus za rychlost, počítadlo času a pořadí. Kahoot! je víc hra, s body podle rychlosti a více typy otázek.",
   },
 ];
 

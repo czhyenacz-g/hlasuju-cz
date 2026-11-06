@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { usePolling } from "../../lib/use-polling.ts";
 import { getOrCreateParticipantId } from "../../lib/participant-id.ts";
 import AlphegaAffiliateBanner from "../../components/AlphegaAffiliateBanner.tsx";
-import CountdownBadge from "../../components/CountdownBadge.tsx";
-import { useCountdown } from "../../lib/polls/use-countdown.ts";
 import { QuestionImages } from "../../components/QuestionImage.tsx";
 import QuestionLink from "../../components/QuestionLink.tsx";
 import ResultsBarChart from "../../components/ResultsBarChart.tsx";
@@ -115,7 +113,6 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   const closedQuestion = data && !data.notFound ? data.poll.closedQuestion : null;
   const slide = data && !data.notFound ? (data.poll.slide ?? null) : null;
   const activeQuestionId = activeQuestion?.id ?? null;
-  const secondsLeft = useCountdown(activeQuestionId, activeQuestion?.remainingMs ?? null);
 
   // Chybová hláška patří jen k otázce, u které vznikla.
   useEffect(() => {
@@ -235,9 +232,6 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   }
 
   const myOptionId = myVotes[String(activeQuestion.id)];
-  if (myOptionId === undefined && secondsLeft === 0) {
-    return <StateScreen title="Čas vypršel" message="Odpovědi už se nepřijímají. Čekáme na další otázku…" showAd />;
-  }
   if (myOptionId !== undefined) {
     // Hlas je odeslaný, hlavní úkol dokončen -> compact banner je tu v
     // pořádku (viz zadání "zobraz ho ve chvíli, kdy uživatel odešle
@@ -259,11 +253,6 @@ export default function PollParticipant({ publicCode }: { publicCode: string }) 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 py-6 sm:py-10">
       <div className="w-full max-w-md">
-        {secondsLeft !== null && (
-          <div className="mb-4 flex justify-center">
-            <CountdownBadge seconds={secondsLeft} className="h-14 min-w-14 px-3 text-2xl" />
-          </div>
-        )}
         {activeQuestion.images.length > 0 && (
           <QuestionImages images={activeQuestion.images} maxHeightClass="max-h-[32vh] sm:max-h-[40vh]" className="mb-5" priority />
         )}

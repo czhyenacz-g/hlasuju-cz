@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { options, polls, questions } from "../../db/schema.ts";
-import { questionMediaColumns, remainingMsColumn, toPublicLink, toQuestionImages, toQuestionLink, toRemainingMs } from "./question-media.ts";
+import { questionMediaColumns, toPublicLink, toQuestionImages, toQuestionLink } from "./question-media.ts";
 import type { PublicPollView } from "./types.ts";
 
 /**
@@ -67,8 +67,6 @@ export async function getPublicPoll(publicCode: string): Promise<PublicPollView 
         images: toQuestionImages(question),
         link: link?.showDuringVoting ? toPublicLink(link) : null,
         options: questionOptions,
-        remainingMs: toRemainingMs(question.remainingMs),
-        timeLimitSeconds: question.timeLimitSeconds,
       };
     } else if (question?.status === "ended") {
       closedQuestion = {
@@ -102,8 +100,6 @@ function selectQuestion(pollId: number, questionId: number) {
       kind: questions.kind,
       resultsQuestionId: questions.resultsQuestionId,
       correctOptionId: questions.correctOptionId,
-      timeLimitSeconds: questions.timeLimitSeconds,
-      remainingMs: remainingMsColumn,
       ...questionMediaColumns,
     })
     .from(questions)

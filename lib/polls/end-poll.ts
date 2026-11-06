@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "../../db/index.ts";
 import { polls, questions } from "../../db/schema.ts";
 import { extendedExpiresAt } from "./expiry.ts";
@@ -24,7 +24,7 @@ export async function endPoll(moderatorToken: string): Promise<EndPollResult> {
 
     await tx
       .update(questions)
-      .set({ status: "ended" })
+      .set({ status: "ended", timerStoppedAt: sql`now()` })
       .where(and(eq(questions.pollId, poll.id), eq(questions.status, "active")));
 
     await tx.update(polls).set({ status: "closed", expiresAt: extendedExpiresAt() }).where(eq(polls.id, poll.id));

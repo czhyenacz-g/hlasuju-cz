@@ -69,11 +69,14 @@ export function toPublicLink(link: QuestionLink | null): PublicQuestionLink | nu
 }
 
 /**
- * Zbývající čas odpočtu v ms podle hodin databáze (stejné hodiny, podle
- * kterých cast-vote.ts hlasy odmítá). NULL = otázka nemá běžící odpočet.
+ * Počítadlo času slajdu podle hodin databáze: uplynulé ms od zobrazení
+ * slajdu (do uzavření otázky, pak stojí). NULL = nepočítá se.
  */
-export const remainingMsColumn = sql<string | number | null>`case when ${questions.answerDeadline} is null then null else greatest(0, round(extract(epoch from (${questions.answerDeadline} - now())) * 1000)) end`;
+export const timerColumns = {
+  timerElapsedMs: sql<string | number | null>`case when ${questions.timerStartedAt} is null then null else greatest(0, round(extract(epoch from (coalesce(${questions.timerStoppedAt}, now()) - ${questions.timerStartedAt})) * 1000)) end`,
+  timerRunning: sql<boolean>`${questions.timerStoppedAt} is null`,
+};
 
-export function toRemainingMs(value: string | number | null): number | null {
-  return value === null ? null : Number(value);
+export function toTimer(row: { timerElapsedMs: string | number | null; timerRunning: boolean }) {
+  return row.timerElapsedMs === null ? null : { elapsedMs: Number(row.timerElapsedMs), running: row.timerRunning };
 }
