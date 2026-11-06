@@ -38,8 +38,8 @@ zapojení monitoru).
 
 ## Stav
 
-- [ ] Monitor zapojený (služba, interval):
-- [ ] Příjemce upozornění:
+- [ ] Monitor zapojený (služba, interval): zatím ne — externí služba se zatím neřeší
+- [x] Příjemce upozornění: hynek@darbujan.com
 - [ ] Ověřeno doručení e-mailu o výpadku i o obnovení:
 
 ## Výměna tokenu
